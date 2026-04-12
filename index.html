@@ -2882,10 +2882,11 @@
         return code;
     }
 
+    // Remote multiplayer server (Render)
+    var MULTIPLAYER_SERVER = 'wss://scanline-serpent-online-multiplayer.onrender.com/ws';
+
     function getWsUrl() {
-        var loc = window.location;
-        var proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-        return proto + '//' + loc.host + '/ws';
+        return MULTIPLAYER_SERVER;
     }
 
     function connectToServer() {
