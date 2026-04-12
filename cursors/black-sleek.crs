@@ -1,0 +1,45 @@
+﻿[UpArrow]
+Path=Gand Alternative Select.cur
+
+[Wait]
+Path=Gand Busy.ani
+
+[SizeNWSE]
+Path=Gand Diagonal Resize 1.cur
+
+[SizeNESW]
+Path=Gand Diagonal Resize 2.cur
+
+[Pin]
+Path=Gand Location Select.cur
+
+[SizeAll]
+Path=Gand Move.cur
+
+[Arrow]
+Path=Gand Normal Select.cur
+
+[Person]
+Path=Gand Person Select.cur
+
+[Help]
+Path=Gand Help Select.cur
+
+[SizeWE]
+Path=Gand Horizontal Resize.cur
+
+[Hand]
+Path=Gand Link Select.cur
+
+[Crosshair]
+Path=Gand Precision Select.ani
+
+[No]
+Path=Gand Unavailable.cur
+
+[SizeNS]
+Path=Gand Vertical Resize.cur
+
+[AppStarting]
+Path=Gand Working in Backround.ani
+

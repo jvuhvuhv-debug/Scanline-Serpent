@@ -1,0 +1,12 @@
+{
+  "name": "scanline-serpent",
+  "version": "1.0.0",
+  "description": "Scanline Serpent — multiplayer snake game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

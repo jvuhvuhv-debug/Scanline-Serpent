@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prism Redwood</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        :root {
+            --primary-bg: #1d1d1d;
+            --secondary-bg: #2a2a2a;
+            --tertiary-bg: #3a3a3a;
+            --text-primary: #f5f5f5;
+            --text-secondary: #a0a0a0;
+            --accent: #ff3b30;
+            --border-color: #444;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        /* Hidden by default until setup completes */
+        body.setup-complete .desktop,
+        body.setup-complete .menu-bar,
+        body.setup-complete .dock {
+            display: flex;
+        }
+
+        body:not(.setup-complete) .desktop,
+        body:not(.setup-complete) .menu-bar,
+        body:not(.setup-complete) .dock {
+            display: none;
+        }
+
+        /* Custom Cursor */
+        body {
+            cursor: url('cursors/Gand%20Normal%20Select.cur'), auto;
+        }
+
+        button:hover, a:hover, .clickable:hover, .menu-item:hover, .dock-item:hover, .desktop-icon:hover, .settings-sidebar-item:hover {
+            cursor: url('cursors/Gand%20Link%20Select.cur'), auto;
+        }
+
+        .window-title-bar {
+            cursor: url('cursors/Gand%20Move.cur'), move;
+        }
+
+        input[type="range"]:hover {
+            cursor: url('cursors/Gand%20Horizontal%20Resize.cur'), auto;
+        }
+
+        /* Desktop Background */
+        .desktop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=3840&h=2160&fit=crop&q=90') center/cover;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .desktop::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(15, 58, 26, 0.3) 0%, rgba(26, 92, 58, 0.2) 50%, rgba(13, 40, 24, 0.3) 100%);
+            z-index: 1;
+        }
+
+        .desktop-icons {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            gap: 40px;
+            width: calc(100% - 60px);
+            height: calc(100% - 60px);
+            align-content: flex-start;
+            z-index: 2;
+        }
+
+        .desktop-icon {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: 80px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+            position: relative;
+        }
+
+        .desktop-icon:hover {
+            transform: scale(1.1);
+        }
+
+        .desktop-icon.dragging {
+            opacity: 0.7;
+        }
+
+        .desktop-icon-image {
+            width: 64px;
+            height: 64px;
+            background: var(--tertiary-bg);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+        }
+
+        .desktop-icon:hover .desktop-icon-image {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+        }
+
+        .desktop-icon-label {
+            font-size: 12px;
+            color: var(--text-primary);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Dock */
+        .dock {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(29, 29, 29, 0.85);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 8px 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 100;
+        }
+
+        .dock-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+            margin: 0 4px;
+        }
+
+        .dock-item {
+            width: 48px;
+            height: 48px;
+            background: var(--secondary-bg);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .dock-item:hover {
+            transform: scale(1.15) translateY(-8px);
+            background: var(--tertiary-bg);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .dock-item.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .dock-minimized {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dock-minimized-item {
+            width: 48px;
+            height: 48px;
+            background: var(--secondary-bg);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
+            position: relative;
+        }
+
+        .dock-minimized-item:hover {
+            transform: scale(1.15) translateY(-8px);
+            background: var(--tertiary-bg);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Menu Bar */
+        .menu-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: rgba(29, 29, 29, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 13px;
+            color: var(--text-primary);
+            z-index: 200;
+            gap: 40px;
+        }
+
+        .menu-bar-left {
+            display: flex;
+            gap: 30px;
+            flex: 1;
+        }
+
+        .menu-bar-center {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .menu-bar-right {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .menu-item {
+            cursor: pointer;
+            transition: color 0.2s ease;
+            padding: 2px 6px;
+            position: relative;
+        }
+
+        .menu-item:hover {
+            color: var(--accent);
+        }
+
+        .menu-dropdown {
+            position: absolute;
+            top: 28px;
+            left: 0;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            min-width: 200px;
+            display: none;
+            z-index: 300;
+            padding: 8px 0;
+        }
+
+        .menu-item.active .menu-dropdown {
+            display: block;
+        }
+
+        .menu-dropdown-item {
+            padding: 10px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            white-space: nowrap;
+            border-left: 3px solid transparent;
+        }
+
+        .menu-dropdown-item:hover {
+            background: var(--tertiary-bg);
+            border-left-color: var(--accent);
+        }
+
+        .menu-dropdown-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 4px 0;
+        }
+
+        /* Setup Wizard */
+        .setup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=3840&h=2160&fit=crop&q=90') center/cover;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .setup-overlay::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: -1;
+        }
+
+        .setup-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .setup-wizard {
+            background: var(--secondary-bg);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 600px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .setup-header {
+            background: linear-gradient(135deg, #1a4d2e 0%, #0f3a1a 100%);
+            padding: 60px 40px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .setup-header h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .setup-header p {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .setup-content {
+            padding: 40px;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .setup-step {
+            display: none;
+        }
+
+        .setup-step.active {
+            display: block;
+        }
+
+        .setup-step h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .setup-step p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .setup-input-group {
+            margin-bottom: 20px;
+        }
+
+        .setup-input-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .setup-input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .setup-input-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.1);
+        }
+
+        .setup-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-top: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .setup-progress {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .setup-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .setup-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .setup-btn-secondary {
+            background: var(--tertiary-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .setup-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .setup-btn-primary {
+            background: #ff3b30;
+            color: white;
+        }
+
+        .setup-btn-primary:hover {
+            background: #ff1744;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+        }
+
+        /* Window System */
+        .window {
+            position: fixed;
+            background: var(--secondary-bg);
+            border-radius: 12px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 400px;
+            min-height: 300px;
+            z-index: 50;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .window.minimizing {
+            transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border-radius: 10px;
+        }
+
+        .window.active {
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            z-index: 99;
+        }
+
+        .window-title-bar {
+            background: var(--tertiary-bg);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            cursor: move;
+            user-select: none;
+        }
+
+        .window-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+            text-align: center;
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .window-control-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+        }
+
+        .window-control-btn.close {
+            background: #ed6158;
+        }
+
+        .window-control-btn.minimize {
+            background: #fcc02e;
+        }
+
+        .window-control-btn.maximize {
+            background: #5fc038;
+        }
+
+        .window-control-btn:hover {
+            opacity: 0.8;
+        }
+
+        .window-content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            font-size: 14px;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* About Window */
+        .about-about-section {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .about-about-section h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #4a9d6f 0%, #2a7a4f 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .about-about-section p {
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .system-info {
+            background: var(--primary-bg);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .system-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .system-info-row:last-child {
+            border-bottom: none;
+        }
+
+        /* Settings Sidebar */
+        .settings-container {
+            display: flex;
+            height: 100%;
+        }
+
+        .settings-sidebar {
+            width: 150px;
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            background: var(--primary-bg);
+        }
+
+        .settings-sidebar-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .settings-sidebar-item:hover {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+        }
+
+        .settings-sidebar-item.active {
+            background: var(--secondary-bg);
+            border-left-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .settings-section {
+            display: none;
+            padding: 20px;
+        }
+
+        .settings-section.active {
+            display: block;
+        }
+
+        .settings-section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .settings-group {
+            margin-bottom: 24px;
+        }
+
+        .settings-group-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .wallpaper-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .wallpaper-item {
+            cursor: pointer;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            height: 100px;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .wallpaper-item:hover {
+            border-color: var(--accent);
+            transform: scale(1.02);
+        }
+
+        .wallpaper-item.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2);
+        }
+
+        /* Boot Screen */
+        .boot-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        .boot-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .boot-logo {
+            font-size: 120px;
+            opacity: 0;
+            animation: fadeInTree 3s ease forwards;
+            filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0));
+            transition: all 0.5s ease;
+        }
+
+        .boot-logo.glowing {
+            animation: glow 1.5s ease forwards;
+            filter: drop-shadow(0 0 50px rgba(76, 175, 80, 1));
+        }
+
+        @keyframes fadeInTree {
+            0% { opacity: 0; transform: scale(0.5); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes glow {
+            0% { 
+                filter: drop-shadow(0 0 20px rgba(76, 175, 80, 0.5));
+                color: #fff;
+            }
+            100% { 
+                filter: drop-shadow(0 0 60px rgba(76, 175, 80, 1));
+                color: #4caf50;
+            }
+        }
+
+        .boot-text {
+            position: absolute;
+            bottom: 100px;
+            opacity: 0;
+            font-size: 18px;
+            color: #4caf50;
+            animation: bootTextFade 3s ease 0s forwards;
+        }
+
+        @keyframes bootTextFade {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        /* Reset Screen */
+        .reset-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .reset-screen.active {
+            display: flex;
+        }
+
+        .reset-content {
+            text-align: center;
+            color: #fff;
+        }
+
+        .reset-percentage {
+            font-size: 48px;
+            font-weight: 600;
+            margin: 20px 0;
+            color: #4caf50;
+        }
+
+        .reset-bar {
+            width: 400px;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px auto;
+        }
+
+        .reset-progress {
+            height: 100%;
+            background: #4caf50;
+            width: 0%;
+            transition: width 0.3s linear;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--tertiary-bg);
+            border-radius: 6px;
+            border: 2px solid var(--secondary-bg);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-color);
+        }
+    </style>
+</head>
+<body>
+    <!-- Boot Screen -->
+    <div class="boot-screen" id="bootScreen">
+        <div class="boot-logo" id="bootLogo">🌲</div>
+        <div class="boot-text" id="bootText">Prism Redwood</div>
+    </div>
+
+    <!-- Reset Screen -->
+    <div class="reset-screen" id="resetScreen">
+        <div class="reset-content">
+            <h1 style="margin-bottom: 30px;">Resetting System...</h1>
+            <div class="reset-bar">
+                <div class="reset-progress" id="resetProgress"></div>
+            </div>
+            <div class="reset-percentage" id="resetPercentage">0%</div>
+        </div>
+    </div>
+
+    <!-- Desktop -->
+    <div class="desktop">
+        <div class="desktop-icons" id="desktopIcons">
+            <div class="desktop-icon" data-app="about">
+                <div class="desktop-icon-image"><i class="fas fa-info-circle"></i></div>
+                <div class="desktop-icon-label">About Prism</div>
+            </div>
+            <div class="desktop-icon" data-app="settings">
+                <div class="desktop-icon-image"><i class="fas fa-cog"></i></div>
+                <div class="desktop-icon-label">Settings</div>
+            </div>
+            <div class="desktop-icon" data-app="files">
+                <div class="desktop-icon-image"><i class="fas fa-folder"></i></div>
+                <div class="desktop-icon-label">File Explorer</div>
+            </div>
+            <div class="desktop-icon" data-app="calculator">
+                <div class="desktop-icon-image"><i class="fas fa-calculator"></i></div>
+                <div class="desktop-icon-label">Calculator</div>
+            </div>
+            <div class="desktop-icon" data-app="notes">
+                <div class="desktop-icon-image"><i class="fas fa-sticky-note"></i></div>
+                <div class="desktop-icon-label">Notes</div>
+            </div>
+            <div class="desktop-icon" data-app="terminal">
+                <div class="desktop-icon-image"><i class="fas fa-terminal"></i></div>
+                <div class="desktop-icon-label">Terminal</div>
+            </div>
+            <div class="desktop-icon" data-app="monitor">
+                <div class="desktop-icon-image"><i class="fas fa-tachometer-alt"></i></div>
+                <div class="desktop-icon-label">System Monitor</div>
+            </div>
+            <div class="desktop-icon" data-app="calendar">
+                <div class="desktop-icon-image"><i class="fas fa-calendar"></i></div>
+                <div class="desktop-icon-label">Calendar</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Bar -->
+    <div class="menu-bar">
+        <div class="menu-bar-left">
+            <span class="menu-item" id="fileMenu">File
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item" onclick="openWindow('notes')">New Window</div>
+                    <div class="menu-dropdown-item" onclick="closeAllWindows()">Close All</div>
+                    <div class="menu-dropdown-divider"></div>
+                    <div class="menu-dropdown-item" onclick="exitRedwood()">Exit Prism Redwood</div>
+                </div>
+            </span>
+            <span class="menu-item" id="editMenu">Edit
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item">Undo</div>
+                    <div class="menu-dropdown-item">Redo</div>
+                    <div class="menu-dropdown-divider"></div>
+                    <div class="menu-dropdown-item">Cut</div>
+                    <div class="menu-dropdown-item">Copy</div>
+                    <div class="menu-dropdown-item">Paste</div>
+                </div>
+            </span>
+            <span class="menu-item" id="viewMenu">View
+                <div class="menu-dropdown">
+                    <div class="menu-dropdown-item" onclick="toggleFullscreen()">Full Screen</div>
+                    <div class="menu-dropdown-item">Zoom In</div>
+                    <div class="menu-dropdown-item">Zoom Out</div>
+                </div>
+            </span>
+        </div>
+        <div class="menu-bar-center">Prism Redwood</div>
+        <div class="menu-bar-right">
+            <span class="menu-item" id="time">12:00</span>
+        </div>
+    </div>
+
+    <!-- Dock -->
+    <div class="dock">
+        <div class="dock-item" onclick="toggleAllWindows()" title="Hide/Show"><i class="fas fa-square"></i></div>
+        <div class="dock-divider"></div>
+        <div class="dock-item" onclick="openWindow('files')" title="File Explorer"><i class="fas fa-folder"></i></div>
+        <div class="dock-item" onclick="openWindow('calculator')" title="Calculator"><i class="fas fa-calculator"></i></div>
+        <div class="dock-item" onclick="openWindow('notes')" title="Notes"><i class="fas fa-sticky-note"></i></div>
+        <div class="dock-item" onclick="openWindow('terminal')" title="Terminal"><i class="fas fa-terminal"></i></div>
+        <div class="dock-item" onclick="openWindow('monitor')" title="System Monitor"><i class="fas fa-tachometer-alt"></i></div>
+        <div class="dock-item" onclick="openWindow('calendar')" title="Calendar"><i class="fas fa-calendar"></i></div>
+        <div class="dock-divider"></div>
+        <div class="dock-item" onclick="openWindow('settings')" title="Settings"><i class="fas fa-cog"></i></div>
+        <div class="dock-divider"></div>
+        <div id="minimizedApps" class="dock-minimized"></div>
+    </div>
+
+    <!-- Setup Wizard -->
+    <div class="setup-overlay" id="setupOverlay">
+        <div class="setup-wizard">
+            <div class="setup-header">
+                <h1>Welcome to Prism Redwood</h1>
+                <p>Set up your system</p>
+            </div>
+            <div class="setup-content">
+                <div class="setup-step active" id="step-0">
+                    <h2>Welcome</h2>
+                    <p>Prism Redwood is a modern operating system inspired by the beauty of nature. This setup wizard will help you get started.</p>
+                </div>
+                <div class="setup-step" id="step-1">
+                    <h2>Personalization</h2>
+                    <div class="setup-input-group">
+                        <label>Computer Name</label>
+                        <input type="text" id="computerName" placeholder="My Prism" value="Prism Redwood">
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-secondary);">This name will identify your system on the network.</p>
+                </div>
+                <div class="setup-step" id="step-2">
+                    <h2>Complete Setup</h2>
+                    <p>You're all set! Your Prism Redwood system is ready to use. Click the Finish button to continue.</p>
+                </div>
+            </div>
+            <div class="setup-footer">
+                <div class="setup-progress"><span id="stepIndicator">Step 1 of 3</span></div>
+                <div class="setup-buttons">
+                    <button class="setup-btn setup-btn-secondary" onclick="prevStep()" id="prevBtn" style="display: none;">Back</button>
+                    <button class="setup-btn setup-btn-primary" onclick="nextStep()" id="nextBtn">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Loading Indicator -->
+    <div class="app-loading" id="appLoading">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Windows Container -->
+    <div id="windowsContainer"></div>
+
+    <script>
+        // Global state
+        let currentSetupStep = 0;
+        const totalSteps = 3;
+        let windows = [];
+        let minimizedWindows = [];
+        let windowZIndex = 50;
+        let currentWallpaper = 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=3840&h=2160&fit=crop&q=90';
+
+        // Wallpaper options
+        const wallpapers = {
+            redwood: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=3840&h=2160&fit=crop&q=90',
+            forest: 'https://images.unsplash.com/photo-1511497584788-876760111969?w=3840&h=2160&fit=crop&q=90',
+            mountain: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=3840&h=2160&fit=crop&q=90',
+            nature: 'https://images.unsplash.com/photo-1469022563149-aa64dbd37dae?w=3840&h=2160&fit=crop&q=90'
+        };
+
+        // Initialize
+        window.addEventListener('load', () => {
+            updateTime();
+            setInterval(updateTime, 1000);
+            setupMenuBar();
+            getFileSystem(); // Initialize file system
+            setupDesktopIconDragAndDrop();
+            
+            // Check if setup is already complete
+            const setupComplete = localStorage.getItem('prism_setup_complete') === 'true';
+            
+            if (setupComplete) {
+                // Boot directly to desktop
+                bootToDesktop();
+            } else {
+                // Show boot screen first
+                showBootAnimation();
+            }
+        });
+
+        // Menu bar setup
+        function setupMenuBar() {
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+                    item.classList.add('active');
+                });
+            });
+
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+            });
+        }
+
+        // Desktop icon click handlers
+        function setupDesktopIconDragAndDrop() {
+            const desktopIcons = document.getElementById('desktopIcons');
+            if (!desktopIcons) return;
+            
+            // Add click handler to desktop icons
+            const icons = desktopIcons.querySelectorAll('.desktop-icon');
+            icons.forEach(icon => {
+                icon.addEventListener('click', (e) => {
+                    const app = icon.dataset.app;
+                    openWindow(app);
+                });
+            });
+        }
+
+        // Show boot animation
+        function showBootAnimation() {
+            const bootScreen = document.getElementById('bootScreen');
+            const bootLogo = document.getElementById('bootLogo');
+            const bootText = document.getElementById('bootText');
+            
+            bootScreen.classList.remove('hidden');
+            
+            // Wait for tree to fade in
+            setTimeout(() => {
+                bootLogo.classList.add('glowing');
+                
+                // After glow animation, show setup or desktop
+                setTimeout(() => {
+                    bootScreen.classList.add('hidden');
+                    showSetup();
+                }, 4000);
+            }, 3000);
+        }
+
+        // Boot directly to desktop
+        function bootToDesktop() {
+            const bootScreen = document.getElementById('bootScreen');
+            const bootLogo = document.getElementById('bootLogo');
+            
+            bootScreen.classList.remove('hidden');
+            
+            // Wait for tree to fade in and glow
+            setTimeout(() => {
+                bootLogo.classList.add('glowing');
+                
+                // After glow animation, go to desktop
+                setTimeout(() => {
+                    bootScreen.classList.add('hidden');
+                    document.body.classList.add('setup-complete');
+                    setupDesktopIconDragAndDrop();
+                    restoreDesktopIconPositions();
+                }, 4000);
+            }, 3000);
+        }
+
+        // Save desktop icon positions
+        function saveDesktopIconPositions() {
+            const icons = document.querySelectorAll('.desktop-icon');
+            const positions = {};
+            icons.forEach(icon => {
+                const app = icon.dataset.app;
+                positions[app] = {
+                    left: icon.style.left,
+                    top: icon.style.top
+                };
+            });
+            localStorage.setItem('redwood_icon_positions', JSON.stringify(positions));
+        }
+
+        // Restore desktop icon positions
+        function restoreDesktopIconPositions() {
+            const positions = localStorage.getItem('redwood_icon_positions');
+            if (positions) {
+                const pos = JSON.parse(positions);
+                Object.keys(pos).forEach(app => {
+                    const icon = document.querySelector(`[data-app="${app}"]`);
+                    if (icon) {
+                        icon.style.position = 'absolute';
+                        icon.style.left = pos[app].left;
+                        icon.style.top = pos[app].top;
+                    }
+                });
+            }
+        }
+
+        // Initiate full system reset
+        function initiateFullReset() {
+            const resetScreen = document.getElementById('resetScreen');
+            resetScreen.classList.add('active');
+            
+            // Hide everything else
+            document.querySelector('.desktop').style.display = 'none';
+            document.querySelector('.menu-bar').style.display = 'none';
+            document.querySelector('.dock').style.display = 'none';
+            
+            let percentage = 0;
+            const resetInterval = setInterval(() => {
+                const increment = Math.floor(Math.random() * 3) + 1;
+                percentage = Math.min(percentage + increment, 100);
+                
+                document.getElementById('resetPercentage').textContent = percentage + '%';
+                document.getElementById('resetProgress').style.width = percentage + '%';
+                
+                if (percentage === 100) {
+                    clearInterval(resetInterval);
+                    
+                    // Wait 1.5 seconds then reset
+                    setTimeout(() => {
+                        // Clear all data
+                        localStorage.clear();
+                        
+                        // Reload and show boot
+                        location.reload();
+                    }, 1500);
+                }
+            }, 300);
+        }
+
+        // Setup - show on load
+        function showSetup() {
+            const overlay = document.getElementById('setupOverlay');
+            overlay.style.display = 'flex';
+            currentSetupStep = 0;
+            updateSetupUI();
+            document.getElementById('computerName').focus();
+        }
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('time').textContent = `${hours}:${minutes}`;
+        }
+
+        // Setup wizard
+        function nextStep() {
+            if (currentSetupStep < totalSteps - 1) {
+                document.getElementById(`step-${currentSetupStep}`).classList.remove('active');
+                currentSetupStep++;
+                document.getElementById(`step-${currentSetupStep}`).classList.add('active');
+                updateSetupUI();
+            } else {
+                completeSetup();
+            }
+        }
+
+        function prevStep() {
+            if (currentSetupStep > 0) {
+                document.getElementById(`step-${currentSetupStep}`).classList.remove('active');
+                currentSetupStep--;
+                document.getElementById(`step-${currentSetupStep}`).classList.add('active');
+                updateSetupUI();
+            }
+        }
+
+        function updateSetupUI() {
+            document.getElementById('stepIndicator').textContent = `Step ${currentSetupStep + 1} of ${totalSteps}`;
+            document.getElementById('prevBtn').style.display = currentSetupStep > 0 ? 'block' : 'none';
+            document.getElementById('nextBtn').textContent = currentSetupStep === totalSteps - 1 ? 'Finish' : 'Next';
+        }
+
+        function completeSetup() {
+            const overlay = document.getElementById('setupOverlay');
+            overlay.classList.add('hidden');
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.body.classList.add('setup-complete');
+                // Mark setup as complete
+                localStorage.setItem('prism_setup_complete', 'true');
+                setupDesktopIconDragAndDrop();
+            }, 300);
+        }
+
+        // Show loading spinner
+        function showLoading() {
+            document.getElementById('appLoading').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('appLoading').classList.remove('active');
+        }
+
+        // Window management with delays
+        function openWindow(type) {
+            setTimeout(() => {
+                const windowId = `window-${Date.now()}`;
+                const container = document.getElementById('windowsContainer');
+                let content = '';
+                let title = '';
+                let width = '500px';
+                let height = 'auto';
+
+                switch(type) {
+                    case 'about':
+                        title = 'About Prism';
+                        content = `
+                            <div class="about-about-section">
+                                <h1 style="font-size: 48px; margin-bottom: 8px;"><i class="fas fa-tree"></i></h1>
+                                <h1>Prism Redwood</h1>
+                                <p>Version 1.0</p>
+                                <p>Where Light Meets System</p>
+                                <div class="system-info">
+                                    <div class="system-info-row">
+                                        <span>OS Name:</span>
+                                        <span>Prism Redwood</span>
+                                    </div>
+                                    <div class="system-info-row">
+                                        <span>Build:</span>
+                                        <span>2026.1</span>
+                                    </div>
+                                    <div class="system-info-row">
+                                        <span>Architecture:</span>
+                                        <span>Universal</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        break;
+
+                    case 'settings':
+                        title = 'Settings';
+                        width = '700px';
+                        height = '500px';
+                        content = createSettingsContent();
+                        break;
+
+                    case 'calculator':
+                        title = 'Calculator';
+                        width = '320px';
+                        height = '420px';
+                        content = createCalculatorContent();
+                        break;
+
+                    case 'notes':
+                        title = 'Notes';
+                        width = '600px';
+                        height = '400px';
+                        content = `<textarea style="width: 100%; height: 100%; border: none; background: var(--primary-bg); color: var(--text-primary); padding: 12px; resize: none; font-family: monospace; font-size: 13px;"></textarea>`;
+                        break;
+
+                    case 'terminal':
+                        title = 'Terminal';
+                        width = '700px';
+                        height = '450px';
+                        content = `<div style="width: 100%; height: 100%; background: #000; color: #0f0; padding: 12px; font-family: monospace; font-size: 12px; overflow-y: auto;">prism@system ~ $ _</div>`;
+                        break;
+
+                    case 'monitor':
+                        title = 'System Monitor';
+                        width = '600px';
+                        height = '450px';
+                        content = createMonitorContent();
+                        break;
+
+                    case 'calendar':
+                        title = 'Calendar';
+                        width = '400px';
+                        height = '450px';
+                        content = createCalendarContent();
+                        break;
+
+                    case 'files':
+                        title = 'File Explorer';
+                        width = '700px';
+                        height = '500px';
+                        content = createFileExplorerContent();
+                        break;
+                }
+
+                const windowEl = document.createElement('div');
+                windowEl.className = 'window active';
+                windowEl.id = windowId;
+                windowEl.style.left = (50 + windows.length * 30) + 'px';
+                windowEl.style.top = (80 + windows.length * 30) + 'px';
+                windowEl.style.width = width;
+                if (height !== 'auto') windowEl.style.height = height;
+                windowEl.style.zIndex = windowZIndex++;
+                windowEl.dataset.type = type;
+                windowEl.style.opacity = '0';
+                windowEl.style.transform = 'scale(0.85)';
+
+                windowEl.innerHTML = `
+                    <div class="window-title-bar">
+                        <div class="window-controls">
+                            <button class="window-control-btn close" onclick="closeWindow('${windowId}')"></button>
+                            <button class="window-control-btn minimize" onclick="minimizeWindow('${windowId}')"></button>
+                            <button class="window-control-btn maximize" onclick="maximizeWindow('${windowId}')"></button>
+                        </div>
+                        <div class="window-title">${title}</div>
+                        <div style="width: 60px;"></div>
+                    </div>
+                    <div class="window-content">${content}</div>
+                `;
+
+                container.appendChild(windowEl);
+                makeWindowDraggable(windowEl);
+                windows.push(windowId);
+
+                // Animate in
+                setTimeout(() => {
+                    windowEl.style.opacity = '1';
+                    windowEl.style.transform = 'scale(1)';
+                }, 10);
+
+                // Make window focused
+                document.querySelectorAll('.window').forEach(w => w.classList.remove('active'));
+                windowEl.classList.add('active');
+            }, 2000 + Math.random() * 2000);
+        }
+
+        function createSettingsContent() {
+            return `
+                <div class="settings-container">
+                    <div class="settings-sidebar">
+                        <div class="settings-sidebar-item active" onclick="switchSettingsTab('general', event)"><i class="fas fa-sliders-h"></i> General</div>
+                        <div class="settings-sidebar-item" onclick="switchSettingsTab('display', event)"><i class="fas fa-desktop"></i> Display</div>
+                        <div class="settings-sidebar-item" onclick="switchSettingsTab('wallpaper', event)"><i class="fas fa-image"></i> Wallpaper</div>
+                        <div class="settings-sidebar-item" onclick="switchSettingsTab('system', event)"><i class="fas fa-info-circle"></i> System</div>
+                        <div class="settings-sidebar-item" onclick="switchSettingsTab('reset', event)" style="border-top: 1px solid var(--border-color); margin-top: auto;"><i class="fas fa-refresh"></i> Reset</div>
+                    </div>
+                    <div class="settings-content">
+                        <div class="settings-section active" id="settings-general">
+                            <div class="settings-section-title">General Settings</div>
+                            <div class="settings-group">
+                                <div class="settings-group-label">Appearance</div>
+                                <div style="margin-bottom: 12px;">
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span>Dark Theme (Default)</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                                        <input type="checkbox" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span>Show Menu Bar</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section" id="settings-display">
+                            <div class="settings-section-title">Display Settings</div>
+                            <div class="settings-group">
+                                <div class="settings-group-label">Brightness</div>
+                                <input type="range" min="0" max="100" value="100" style="width: 100%; cursor: pointer; margin-bottom: 20px;">
+                            </div>
+                            <div class="settings-group">
+                                <div class="settings-group-label">Resolution</div>
+                                <select style="width: 100%; padding: 8px 12px; background: var(--tertiary-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer;">
+                                    <option>1920 x 1080</option>
+                                    <option>2560 x 1440</option>
+                                    <option>3840 x 2160</option>
+                                </select>
+                            </div>
+                            <div class="settings-group">
+                                <div class="settings-group-label">Refresh Rate</div>
+                                <select style="width: 100%; padding: 8px 12px; background: var(--tertiary-bg); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer;">
+                                    <option>60 Hz</option>
+                                    <option>120 Hz</option>
+                                    <option>144 Hz</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="settings-section" id="settings-wallpaper">
+                            <div class="settings-section-title">Wallpaper Settings</div>
+                            <div class="settings-group">
+                                <div class="settings-group-label">Select Wallpaper</div>
+                                <div class="wallpaper-grid">
+                                    <div class="wallpaper-item active" style="background-image: url('${wallpapers.redwood}')" onclick="changeWallpaper('redwood')"></div>
+                                    <div class="wallpaper-item" style="background-image: url('${wallpapers.forest}')" onclick="changeWallpaper('forest')"></div>
+                                    <div class="wallpaper-item" style="background-image: url('${wallpapers.mountain}')" onclick="changeWallpaper('mountain')"></div>
+                                    <div class="wallpaper-item" style="background-image: url('${wallpapers.nature}')" onclick="changeWallpaper('nature')"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section" id="settings-system">
+                            <div class="settings-section-title">System Information</div>
+                            <div class="system-info">
+                                <div class="system-info-row">
+                                    <span>Computer Name:</span>
+                                    <span id="sysComputerName">Prism Redwood</span>
+                                </div>
+                                <div class="system-info-row">
+                                    <span>OS Version:</span>
+                                    <span>Prism Redwood 1.0</span>
+                                </div>
+                                <div class="system-info-row">
+                                    <span>Build:</span>
+                                    <span>2026.1</span>
+                                </div>
+                                <div class="system-info-row">
+                                    <span>Architecture:</span>
+                                    <span>Universal</span>
+                                </div>
+                                <div class="system-info-row">
+                                    <span>Theme:</span>
+                                    <span>Dark (Majave)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section" id="settings-reset">
+                            <div class="settings-section-title">Reset System</div>
+                            <div style="margin-bottom: 20px;">
+                                <p style="color: var(--text-secondary); margin-bottom: 16px;">Resetting your system will erase all settings and user data, returning to the initial setup screen.</p>
+                                <button style="background: #ff3b30; border: none; color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;" onclick="initiateFullReset()">Reset System</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function switchSettingsTab(tab, event) {
+            event.stopPropagation();
+            document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.settings-sidebar-item').forEach(s => s.classList.remove('active'));
+            document.getElementById(`settings-${tab}`).classList.add('active');
+            event.target.closest('.settings-sidebar-item').classList.add('active');
+        }
+
+        function changeWallpaper(key) {
+            currentWallpaper = wallpapers[key];
+            const desktop = document.querySelector('.desktop');
+            desktop.style.backgroundImage = `url('${currentWallpaper}')`;
+            
+            document.querySelectorAll('.wallpaper-item').forEach(w => w.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function createCalculatorContent() {
+            return `
+                <div style="display: flex; flex-direction: column; height: 100%; padding: 12px; gap: 8px;">
+                    <div style="background: var(--primary-bg); padding: 12px; border-radius: 6px; text-align: right; font-size: 24px; font-weight: 600; border: 1px solid var(--border-color); min-height: 50px; display: flex; align-items: center; justify-content: flex-end;">0</div>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; flex: 1;">
+                        ${['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', '0', '.', '=', '+'].map(btn => 
+                            `<button style="background: var(--tertiary-bg); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.2s;" onmouseover="this.style.background='var(--accent)'; this.style.color='white'" onmouseout="this.style.background='var(--tertiary-bg)'; this.style.color='var(--text-primary)'">${btn}</button>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function createMonitorContent() {
+            const cpuUsage = Math.floor(Math.random() * 40 + 10);
+            const memUsage = Math.floor(Math.random() * 50 + 20);
+            const diskUsage = Math.floor(Math.random() * 60 + 15);
+            return `
+                <div style="padding: 16px;">
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span>CPU Usage</span>
+                            <span>${cpuUsage}%</span>
+                        </div>
+                        <div style="background: var(--primary-bg); border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div style="background: var(--accent); height: 100%; width: ${cpuUsage}%;"></div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span>Memory Usage</span>
+                            <span>${memUsage}%</span>
+                        </div>
+                        <div style="background: var(--primary-bg); border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div style="background: #5fc038; height: 100%; width: ${memUsage}%;"></div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span>Disk Usage</span>
+                            <span>${diskUsage}%</span>
+                        </div>
+                        <div style="background: var(--primary-bg); border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div style="background: #fcc02e; height: 100%; width: ${diskUsage}%;"></div>
+                        </div>
+                    </div>
+                    <div class="system-info">
+                        <div class="system-info-row">
+                            <span>Uptime:</span>
+                            <span id="monitorUptime">2h 34m</span>
+                        </div>
+                        <div class="system-info-row">
+                            <span>Temperature:</span>
+                            <span>42°C</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createCalendarContent() {
+            const today = new Date();
+            const month = today.getMonth();
+            const year = today.getFullYear();
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            return `
+                <div style="padding: 16px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="font-size: 18px; margin-bottom: 8px;">${monthNames[month]} ${year}</h2>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;">
+                        ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<div style="font-weight: 600; color: var(--text-secondary); padding: 6px;">${d}</div>`).join('')}
+                        ${Array.from({length: 35}, (_, i) => i + 1 - new Date(year, month, 1).getDay()).map(d => 
+                            d > 0 ? `<div style="padding: 8px; border-radius: 4px; background: ${d === today.getDate() ? 'var(--accent)' : 'var(--tertiary-bg)'}; cursor: pointer;">${d}</div>` : '<div></div>'
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function createFileExplorerContent() {
+            const currentPath = window.currentFilePath || '/';
+            const fileSystem = getFileSystem();
+            const items = getPathContents(currentPath);
+            
+            let itemsHTML = items.map(item => {
+                if (item.type === 'folder') {
+                    const newPath = currentPath === '/' ? `/${item.name}` : `${currentPath}/${item.name}`;
+                    return `<div style="display: flex; align-items: center; gap: 12px; padding: 8px; cursor: pointer; border-radius: 6px;" onmouseover="this.style.background='var(--secondary-bg)'" onmouseout="this.style.background='transparent'" ondblclick="navigateFolder('${newPath}')">
+                        <i class="fas fa-folder" style="font-size: 20px; color: var(--accent);"></i>
+                        <span>${item.name}</span>
+                    </div>`;
+                } else {
+                    return `<div style="display: flex; align-items: center; gap: 12px; padding: 8px; cursor: pointer; border-radius: 6px;" onmouseover="this.style.background='var(--secondary-bg)'" onmouseout="this.style.background='transparent'">
+                        <i class="fas fa-file" style="font-size: 20px; color: var(--text-secondary);"></i>
+                        <span>${item.name}</span>
+                    </div>`;
+                }
+            }).join('');
+
+            const upButton = currentPath !== '/' ? `<button style="background: var(--tertiary-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: 6px; cursor: pointer;" onclick="navigateFolder('/')">Home</button>` : '';
+
+            return `
+                <div style="display: flex; flex-direction: column; height: 100%; padding: 12px; gap: 12px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        ${upButton}
+                        <input type="text" id="pathInput" value="${currentPath}" style="flex: 1; background: var(--primary-bg); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: 6px;" readonly>
+                        <button style="background: #ff3b30; border: 1px solid var(--border-color); color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer;" onclick="createNewFolder()">+ Folder</button>
+                    </div>
+                    <div style="flex: 1; background: var(--primary-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; overflow-y: auto;">
+                        ${itemsHTML || '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Empty folder</div>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getFileSystem() {
+            let fs = localStorage.getItem('redwood_filesystem');
+            if (!fs) {
+                fs = {
+                    'HDD': {
+                        type: 'folder',
+                        items: {
+                            'User': { type: 'folder', items: {}},
+                            'System': { type: 'folder', items: {}},
+                            'Applications': { type: 'folder', items: {}}
+                        }
+                    },
+                    'User': {
+                        type: 'folder',
+                        items: {
+                            'Documents': { type: 'folder', items: {} },
+                            'Downloads': { type: 'folder', items: {} },
+                            'Music': { type: 'folder', items: {} },
+                            'Pictures': { type: 'folder', items: {} }
+                        }
+                    },
+                    'System': {
+                        type: 'folder',
+                        items: {
+                            'Logs': { type: 'folder', items: {} },
+                            'Core': { type: 'folder', items: {} }
+                        }
+                    },
+                    'Applications': {
+                        type: 'folder',
+                        items: {}
+                    }
+                };
+                localStorage.setItem('redwood_filesystem', JSON.stringify(fs));
+            }
+            return typeof fs === 'string' ? JSON.parse(fs) : fs;
+        }
+
+        function getPathContents(path) {
+            const fs = getFileSystem();
+            
+            // If path is /, show root folders
+            if (path === '/') {
+                return Object.entries(fs).map(([name, data]) => ({
+                    name: name,
+                    type: data.type || 'folder'
+                }));
+            }
+            
+            const pathParts = path.split('/').filter(p => p);
+            let current = fs;
+
+            for (let part of pathParts) {
+                if (current[part]) {
+                    current = current[part].items || current[part];
+                } else {
+                    return [];
+                }
+            }
+
+            return Object.entries(current).map(([name, data]) => ({
+                name: name,
+                type: data.type || 'file'
+            }));
+        }
+
+        function navigateFolder(path) {
+            window.currentFilePath = path;
+            const window1 = document.querySelector('[data-type="files"]');
+            if (window1) {
+                const content = window1.querySelector('.window-content');
+                content.innerHTML = createFileExplorerContent();
+            }
+        }
+
+        function createNewFolder() {
+            const folderName = prompt('Enter folder name:');
+            if (folderName && folderName.trim()) {
+                const fs = getFileSystem();
+                const currentPath = window.currentFilePath || '/';
+                const pathParts = currentPath.split('/').filter(p => p);
+                let current = fs;
+
+                for (let part of pathParts) {
+                    if (!current[part]) current[part] = { type: 'folder', items: {} };
+                    current = current[part].items || current[part];
+                }
+
+                if (!current[folderName]) {
+                    current[folderName] = { type: 'folder', items: {} };
+                    localStorage.setItem('redwood_filesystem', JSON.stringify(fs));
+                    navigateFolder(currentPath);
+                } else {
+                    alert('Folder already exists!');
+                }
+            }
+        }
+
+        function closeWindow(windowId) {
+            const windowEl = document.getElementById(windowId);
+            if (windowEl) {
+                windowEl.style.opacity = '0';
+                windowEl.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    windowEl.remove();
+                    windows = windows.filter(id => id !== windowId);
+                    minimizedWindows = minimizedWindows.filter(id => id !== windowId);
+                    updateMinimizedDock();
+                }, 200);
+            }
+        }
+
+        function closeAllWindows() {
+            const allWindows = [...windows];
+            allWindows.forEach(windowId => closeWindow(windowId));
+        }
+
+        function minimizeWindow(windowId) {
+            const windowEl = document.getElementById(windowId);
+            if (windowEl) {
+                // Get current position and size
+                const rect = windowEl.getBoundingClientRect();
+                
+                // Dock position (center bottom)
+                const dockY = window.innerHeight - 80;
+                const dockX = window.innerWidth / 2;
+                
+                // Calculate translation to dock
+                const translateX = dockX - (rect.left + rect.width / 2);
+                const translateY = dockY - (rect.top + rect.height / 2);
+                const scale = 0.1;
+                
+                // Apply minimizing animation
+                windowEl.classList.add('minimizing');
+                windowEl.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+                windowEl.style.opacity = '0';
+                
+                setTimeout(() => {
+                    windowEl.style.display = 'none';
+                    windowEl.classList.remove('minimizing');
+                    windowEl.style.transform = '';
+                    windowEl.style.opacity = '1';
+                    
+                    if (!minimizedWindows.includes(windowId)) {
+                        minimizedWindows.push(windowId);
+                    }
+                    updateMinimizedDock();
+                }, 600);
+            }
+        }
+
+        function restoreWindow(windowId) {
+            const windowEl = document.getElementById(windowId);
+            if (windowEl) {
+                windowEl.style.display = 'flex';
+                windowEl.style.opacity = '0';
+                windowEl.style.transform = 'scale(0.5)';
+                setTimeout(() => {
+                    windowEl.style.opacity = '1';
+                    windowEl.style.transform = 'scale(1)';
+                }, 10);
+                
+                windowEl.style.zIndex = windowZIndex++;
+                windowEl.classList.add('active');
+                document.querySelectorAll('.window').forEach(w => {
+                    if (w !== windowEl) w.classList.remove('active');
+                });
+                minimizedWindows = minimizedWindows.filter(id => id !== windowId);
+                updateMinimizedDock();
+            }
+        }
+
+        function updateMinimizedDock() {
+            const dock = document.getElementById('minimizedApps');
+            dock.innerHTML = '';
+
+            minimizedWindows.forEach(windowId => {
+                const windowEl = document.getElementById(windowId);
+                if (windowEl) {
+                    const title = windowEl.querySelector('.window-title').textContent;
+                    const type = windowEl.dataset.type;
+                    let icon = '<i class="fas fa-window-maximize"></i>';
+                    
+                    const iconMap = {
+                        'about': '<i class="fas fa-info-circle"></i>',
+                        'settings': '<i class="fas fa-cog"></i>',
+                        'files': '<i class="fas fa-folder"></i>',
+                        'calculator': '<i class="fas fa-calculator"></i>',
+                        'notes': '<i class="fas fa-sticky-note"></i>',
+                        'terminal': '<i class="fas fa-terminal"></i>',
+                        'monitor': '<i class="fas fa-tachometer-alt"></i>',
+                        'calendar': '<i class="fas fa-calendar"></i>'
+                    };
+                    
+                    icon = iconMap[type] || icon;
+
+                    const item = document.createElement('div');
+                    item.className = 'dock-minimized-item';
+                    item.innerHTML = icon;
+                    item.title = title;
+                    item.onclick = () => restoreWindow(windowId);
+                    dock.appendChild(item);
+                }
+            });
+        }
+
+        function maximizeWindow(windowId) {
+            const windowEl = document.getElementById(windowId);
+            if (windowEl) {
+                if (windowEl.style.width === 'calc(100% - 40px)') {
+                    windowEl.style.width = '500px';
+                    windowEl.style.height = 'auto';
+                    windowEl.style.top = '80px';
+                    windowEl.style.left = '50px';
+                } else {
+                    windowEl.style.width = 'calc(100% - 40px)';
+                    windowEl.style.height = 'calc(100% - 100px)';
+                    windowEl.style.top = '28px';
+                    windowEl.style.left = '20px';
+                }
+            }
+        }
+
+        function toggleAllWindows() {
+            const allWindows = document.querySelectorAll('.window');
+            const allHidden = Array.from(allWindows).every(w => w.style.display === 'none');
+            
+            allWindows.forEach(w => {
+                w.style.display = allHidden ? 'flex' : 'none';
+            });
+
+            if (allHidden) {
+                minimizedWindows = [];
+            } else {
+                minimizedWindows = windows.filter(id => document.getElementById(id) && document.getElementById(id).style.display === 'none');
+            }
+            updateMinimizedDock();
+        }
+
+        function exitPrism() {
+            alert('Thank you for using Prism Redwood!');
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function makeWindowDraggable(windowEl) {
+            const titleBar = windowEl.querySelector('.window-title-bar');
+            let isDragging = false;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            titleBar.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                const rect = windowEl.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                windowEl.classList.add('active');
+                windowEl.style.zIndex = windowZIndex++;
+
+                document.querySelectorAll('.window').forEach(w => {
+                    if (w !== windowEl) w.classList.remove('active');
+                });
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    windowEl.style.left = (e.clientX - offsetX) + 'px';
+                    windowEl.style.top = (e.clientY - offsetY) + 'px';
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        }
+    </script>
+</body>
+</html>
