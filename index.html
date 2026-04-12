@@ -2896,7 +2896,7 @@
                 return;
             }
             var ws = new WebSocket(getWsUrl());
-            var timeout = setTimeout(function() { ws.close(); reject(new Error('WS_TIMEOUT')); }, 10000);
+            var timeout = setTimeout(function() { ws.close(); reject(new Error('WS_TIMEOUT — server may be waking up, try again')); }, 45000);
             ws.onopen = function() {
                 clearTimeout(timeout);
                 onlineWs = ws;
@@ -2936,7 +2936,8 @@
         connectToServer().then(function() {
             wsSend({ type: 'createRoom', code: onlineRoomCode, name: systemName });
         }).catch(function(err) {
-            showToast('SERVER_OFFLINE — Run: node server.js');
+            console.error('WS connect failed:', err);
+            showToast('SERVER_OFFLINE: ' + (err.message || err));
         });
     }
 
