@@ -475,9 +475,9 @@ function start(port, gameDir) {
         }
     });
 
-    server.listen(port, function () {
-        console.log('SCANLINE_SERPENT server running on http://localhost:' + port);
-        console.log('WebSocket endpoint: ws://localhost:' + port + '/ws');
+    server.listen(port, '0.0.0.0', function () {
+        console.log('SCANLINE_SERPENT server running on http://0.0.0.0:' + port);
+        console.log('WebSocket endpoint: ws://0.0.0.0:' + port + '/ws');
         console.log('Anticheat: ' + (ANTICHEAT.enabled ? 'ENABLED (penalty=' + ANTICHEAT.penalty + ')' : 'DISABLED'));
     });
 
