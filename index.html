@@ -226,10 +226,10 @@
         }
         
         .main-menu-buttons .small-btn {
-            width: 206px;
-            padding: 7px;
-            font-size: 0.75rem;
-            margin: 2px;
+            width: 220px;
+            padding: 9px;
+            font-size: 0.80rem;
+            margin: 3px;
         }
         
         .main-menu-buttons .quit-btn {
@@ -418,6 +418,15 @@
         .timer-preset-btn { background: #0a1a0a; border: 1px solid var(--accent); color: var(--accent); padding: 5px 10px; font-family: inherit; font-size: 0.7rem; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; }
         .timer-preset-btn:hover { background: var(--accent); color: #000; }
         .timer-preset-btn.active { background: var(--accent); color: #000; font-weight: bold; }
+        .public-games-list { max-height: 120px; overflow-y: auto; border: 1px solid var(--accent); background: #0a1a0a; padding: 4px; width: 250px; margin: 0 auto; }
+        .public-game-entry { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; font-size: 0.65rem; letter-spacing: 1px; color: var(--text); border-bottom: 1px solid #1a2a1a; cursor: pointer; transition: background 0.15s; }
+        .public-game-entry:hover { background: #1a3a1a; }
+        .public-game-entry:last-child { border-bottom: none; }
+        .public-game-entry .pg-host { color: var(--gold); }
+        .public-game-entry .pg-count { color: var(--accent); opacity: 0.7; }
+        .visibility-toggle { transition: all 0.2s; }
+        .visibility-toggle.private { background: #3a1a1a !important; border-color: #e74c3c !important; color: #e74c3c !important; }
+        .visibility-toggle.public { background: #1a3a1a !important; border-color: var(--accent) !important; color: var(--accent) !important; }
         .timer-preset-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         .lobby-modes-disabled .menu-btn { opacity: 0.3; pointer-events: none; }
         .lobby-timer-disabled .timer-preset-btn { opacity: 0.3; pointer-events: none; }
@@ -1176,6 +1185,11 @@
                 <input type="text" id="join-room-input" class="room-input" placeholder="ROOM CODE" maxlength="6">
             </div>
             <button class="menu-btn" onclick="joinOnlineRoom()">JOIN_ROOM</button>
+            <div id="public-games-section" style="margin-top:14px;">
+                <p class="online-status" style="margin-bottom:6px;">PUBLIC_GAMES</p>
+                <div id="public-games-list" class="public-games-list"><p style="opacity:0.4; font-size:0.7rem;">LOADING...</p></div>
+                <button class="menu-btn" style="margin-top:6px; font-size:0.7rem; padding:6px;" onclick="refreshPublicGames()">REFRESH</button>
+            </div>
             <button class="menu-btn btn-top-margin" onclick="leaveOnlineRoom(); showMenu('main')">RETURN</button>
         </div>
 
@@ -1225,7 +1239,10 @@
                 <button class="menu-btn" onclick="startOnlineGame('key')">Key</button>
                 <button class="menu-btn" onclick="startOnlineGame('ghost')">Ghost</button>
             </div>
-            <button class="menu-btn btn-top-margin" onclick="leaveOnlineRoom(); showMenu('main')">DISCONNECT</button>
+            <div style="margin-top:10px;">
+                <button class="menu-btn visibility-toggle" id="lobby-visibility-btn" onclick="toggleRoomVisibility()" style="font-size:0.7rem; padding:6px; width:auto; display:inline-block;">PUBLIC</button>
+            </div>
+            <button class="menu-btn btn-top-margin" onclick="leaveOnlineRoom(); showMenu('online')">RETURN</button>
         </div>
 
         <div id="modes-menu" class="overlay hidden">
@@ -1584,7 +1601,7 @@
 <!-- FPS Counter -->
 <div id="fps-counter">0 FPS</div>
 
-<div class="version-tag">ONLINE TEST 1.0</div>
+<div class="version-tag">ONLINE TEST 1.1</div>
 
 <!-- Multiplayer uses server.js WebSocket - no external dependency needed -->
 <script>
@@ -1918,6 +1935,7 @@
     let onlineMatchActive = false;   // Is a match in progress?
     let spectatingPid = null;         // PeerId of player being spectated
     let spectatingIndex = 0;          // Index into alive players list
+    let roomIsPublic = true;          // Room visibility (public/private)
 
     // Game state
     let isPausedByUser = false;
@@ -2415,6 +2433,7 @@
         if(id === 'shop') renderShop();
         if(id === 'sp-shop') renderSPShop();
         if(id === 'friends') renderFriendsList();
+        if(id === 'online') refreshPublicGames();
         if(id === 'settings') {
             document.getElementById('volume-main').value = Math.floor(masterVolume * 100);
             document.getElementById('vol-main-label').innerText = Math.floor(masterVolume * 100) + '%';
@@ -2993,9 +3012,11 @@
 
     function createOnlineRoom() {
         onlineRoomCode = generateRoomCode();
+        roomIsPublic = true;
         showToast('CREATING_ROOM...');
         connectToServer().then(function() {
-            wsSend({ type: 'createRoom', code: onlineRoomCode, name: systemName });
+            wsSend({ type: 'createRoom', code: onlineRoomCode, name: systemName, isPublic: true });
+            updateVisibilityButton();
         }).catch(function(err) {
             showToast('SERVER_UNREACHABLE — try again in 30s');
         });
@@ -3014,6 +3035,59 @@
         }).catch(function() {
             showToast('SERVER_UNREACHABLE — try again in 30s');
         });
+    }
+
+    function joinPublicGame(code) {
+        onlineRoomCode = code;
+        showToast('JOINING...');
+        connectToServer().then(function() {
+            wsSend({ type: 'joinRoom', code: code, name: systemName });
+        }).catch(function() {
+            showToast('SERVER_UNREACHABLE — try again in 30s');
+        });
+    }
+
+    function toggleRoomVisibility() {
+        if (!isRoomHost) { showToast('HOST_ONLY'); return; }
+        roomIsPublic = !roomIsPublic;
+        wsSend({ type: 'setVisibility', isPublic: roomIsPublic });
+        updateVisibilityButton();
+        showToast(roomIsPublic ? 'ROOM_IS_PUBLIC' : 'ROOM_IS_PRIVATE');
+    }
+
+    function updateVisibilityButton() {
+        var btn = document.getElementById('lobby-visibility-btn');
+        if (!btn) return;
+        btn.textContent = roomIsPublic ? 'PUBLIC' : 'PRIVATE';
+        btn.className = 'menu-btn visibility-toggle ' + (roomIsPublic ? 'public' : 'private');
+    }
+
+    function refreshPublicGames() {
+        var listEl = document.getElementById('public-games-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<p style="opacity:0.4; font-size:0.7rem;">LOADING...</p>';
+        connectToServer().then(function() {
+            wsSend({ type: 'listRooms' });
+        }).catch(function() {
+            listEl.innerHTML = '<p style="opacity:0.4; font-size:0.7rem;">SERVER_OFFLINE</p>';
+        });
+    }
+
+    function renderPublicGames(roomList) {
+        var listEl = document.getElementById('public-games-list');
+        if (!listEl) return;
+        if (!roomList || roomList.length === 0) {
+            listEl.innerHTML = '<p style="opacity:0.4; font-size:0.7rem;">NO_PUBLIC_GAMES</p>';
+            return;
+        }
+        var html = '';
+        roomList.forEach(function(r) {
+            html += '<div class="public-game-entry" onclick="joinPublicGame(\'' + r.code + '\')">';
+            html += '<span class="pg-host">' + r.host + '</span>';
+            html += '<span class="pg-count">' + r.players + ' PLAYER' + (r.players !== 1 ? 'S' : '') + '</span>';
+            html += '</div>';
+        });
+        listEl.innerHTML = html;
     }
 
     function handleServerMessage(data) {
@@ -3103,6 +3177,9 @@
             showToast('KICKED_BY_ANTICHEAT: ' + data.reason);
             leaveOnlineRoom();
             showMenu('main');
+
+        } else if (data.type === 'roomList') {
+            renderPublicGames(data.rooms);
         }
     }
 

@@ -285,7 +285,7 @@ function start(port, gameDir) {
                     wsSend(ws, { type: 'error', msg: 'ROOM_CODE_IN_USE' });
                     return;
                 }
-                rooms[code] = { host: playerId, timer: 60, players: {} };
+                rooms[code] = { host: playerId, timer: 60, players: {}, isPublic: msg.isPublic !== false, hostName: msg.name || 'HOST', inGame: false };
                 rooms[code].players[playerId] = { ws: ws, name: msg.name || 'HOST', alive: true, snake: [], skin: 'emerald', score: 0 };
                 playerRoom = code;
                 initPlayerAC(playerId);
@@ -312,6 +312,7 @@ function start(port, gameDir) {
             } else if (msg.type === 'startGame') {
                 const room = rooms[playerRoom];
                 if (!room || room.host !== playerId) return;
+                room.inGame = true;
                 Object.keys(room.players).forEach(function (p) {
                     room.players[p].alive = true;
                     room.players[p].score = 0;
@@ -354,6 +355,7 @@ function start(port, gameDir) {
                         scores.push({ name: room.players[p].name, score: room.players[p].score, alive: room.players[p].alive });
                     });
                     scores.sort(function (a, b) { return b.score - a.score; });
+                    room.inGame = false;
                     broadcastRoom(playerRoom, { type: 'gameEnd', reason: 'laststanding', scores: scores });
                 }
 
@@ -365,10 +367,30 @@ function start(port, gameDir) {
                     scores.push({ name: room.players[p].name, score: room.players[p].score, alive: room.players[p].alive });
                 });
                 scores.sort(function (a, b) { return b.score - a.score; });
+                room.inGame = false;
                 broadcastRoom(playerRoom, { type: 'gameEnd', reason: 'timer', scores: scores });
 
             } else if (msg.type === 'timerSync') {
                 broadcastRoom(playerRoom, { type: 'timerSync', remaining: msg.remaining }, playerId);
+
+            } else if (msg.type === 'setVisibility') {
+                const room = rooms[playerRoom];
+                if (!room || room.host !== playerId) return;
+                room.isPublic = msg.isPublic === true;
+
+            } else if (msg.type === 'listRooms') {
+                var roomList = [];
+                Object.keys(rooms).forEach(function (code) {
+                    var r = rooms[code];
+                    if (r.isPublic && !r.inGame) {
+                        roomList.push({
+                            code: code,
+                            host: r.hostName,
+                            players: Object.keys(r.players).length
+                        });
+                    }
+                });
+                wsSend(ws, { type: 'roomList', rooms: roomList });
 
             } else if (msg.type === 'leave') {
                 if (playerRoom) {
