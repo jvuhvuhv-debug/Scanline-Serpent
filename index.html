@@ -848,7 +848,7 @@
         
         #splash-bar-inner span:last-child { margin-right: 0; }
         
-        #splash-percent { color: var(--accent); font-size: 0.7rem; letter-spacing: 2px; margin-top: 8px; opacity: 0.7; }
+        #splash-percent { display: none; }
         
         .analytics-item { margin-bottom: 10px; }
         
@@ -1118,7 +1118,7 @@
             <p id="main-highscore">BEST: <span id="highscore-val">0</span></p>
             <div class="main-menu-buttons">
                 <button class="menu-btn small-btn" onclick="showMenu('modes')">LOAD_PROGRAM</button>
-                <button class="menu-btn small-btn" onclick="showMenu('online')">ONLINE</button>
+                <button class="menu-btn small-btn" onclick="onlineButtonClicked()">ONLINE</button>
                 <button class="menu-btn small-btn" onclick="showMenu('shop')">SKIN_SHOP</button>
                 <button class="menu-btn small-btn" onclick="showMenu('sp-shop')">SP_SHOP</button>
                 <button class="menu-btn small-btn" onclick="showMenu('leaderboard')">LEADERBOARDS</button>
@@ -1176,6 +1176,28 @@
             </div>
             <button class="menu-btn" onclick="joinOnlineRoom()">JOIN_ROOM</button>
             <button class="menu-btn btn-top-margin" onclick="leaveOnlineRoom(); showMenu('main')">RETURN</button>
+        </div>
+
+        <!-- Online Login Gate -->
+        <div id="online-login-menu" class="overlay hidden">
+            <h2 class="section-title">ONLINE_LOGIN_REQUIRED</h2>
+            <p class="online-status">SIGN IN TO ACCESS MULTIPLAYER</p>
+            <div id="online-login-create" style="margin-top:10px;">
+                <p class="account-section-title">CREATE_ACCOUNT</p>
+                <input type="text" id="online-create-user" class="room-input" placeholder="USERNAME" maxlength="16" autocomplete="off">
+                <input type="password" id="online-create-pass" class="room-input" placeholder="PASSWORD" maxlength="32" style="margin-top:6px;" autocomplete="new-password">
+                <input type="password" id="online-create-confirm" class="room-input" placeholder="CONFIRM_PASSWORD" maxlength="32" style="margin-top:6px;" autocomplete="new-password">
+                <button class="menu-btn" style="margin-top:8px;" onclick="onlineCreateAccount()">CREATE</button>
+                <p class="account-link" onclick="toggleOnlineLoginMode()">ALREADY HAVE AN ACCOUNT? LOG IN</p>
+            </div>
+            <div id="online-login-existing" style="display:none; margin-top:10px;">
+                <p class="account-section-title">LOGIN</p>
+                <input type="text" id="online-login-user" class="room-input" placeholder="USERNAME" maxlength="16" autocomplete="off">
+                <input type="password" id="online-login-pass" class="room-input" placeholder="PASSWORD" maxlength="32" style="margin-top:6px;" autocomplete="current-password">
+                <button class="menu-btn" style="margin-top:8px;" onclick="onlineLoginAccount()">LOGIN</button>
+                <p class="account-link" onclick="toggleOnlineLoginMode()">NO ACCOUNT? CREATE ONE</p>
+            </div>
+            <button class="menu-btn btn-top-margin" onclick="showMenu('main')">RETURN</button>
         </div>
 
         <!-- Online Lobby -->
@@ -1561,7 +1583,7 @@
 <!-- FPS Counter -->
 <div id="fps-counter">0 FPS</div>
 
-<div class="version-tag">PUBLIC BETA v2.3.4</div>
+<div class="version-tag">ONLINE TEST 1.0</div>
 
 <!-- Multiplayer uses server.js WebSocket - no external dependency needed -->
 <script>
@@ -1570,8 +1592,8 @@
     const SB_BOARD_ID = "d5728bb2-c673-4925-a093-08de7adf9909";
     const SB_BASE_URL = "https://api.simpleboards.dev/api/entries";
     const SB_AUTH_MARKER = "AUTH_ACCOUNT_DO_NOT_DELETE";
-    const GAME_VERSION = "2.3.4";
-    const REQUIRED_VERSION = "2.3.4";
+    const GAME_VERSION = "1.0";
+    const REQUIRED_VERSION = "1.0";
 
     // Cloud-based authentication functions using leaderboard API
     async function saveAccountToCloud(username, passwordHash) {
@@ -5403,6 +5425,70 @@
     
     // Initialize account display (don't call yet, will be called when settings menu opens)
 
+    // --- Online Login Gate Functions ---
+    function onlineButtonClicked() {
+        if (isLoggedIn) {
+            showMenu('online');
+        } else {
+            showMenu('online-login');
+        }
+    }
+
+    function toggleOnlineLoginMode() {
+        var createDiv = document.getElementById('online-login-create');
+        var loginDiv = document.getElementById('online-login-existing');
+        if (createDiv.style.display === 'none') {
+            createDiv.style.display = '';
+            loginDiv.style.display = 'none';
+        } else {
+            createDiv.style.display = 'none';
+            loginDiv.style.display = '';
+        }
+    }
+
+    function onlineCreateAccount() {
+        var username = document.getElementById('online-create-user').value.toUpperCase().replace(/\s/g, '_');
+        var password = document.getElementById('online-create-pass').value;
+        var confirm = document.getElementById('online-create-confirm').value;
+        if (!username || username.length < 3) { showToast('MIN_3_CHARS'); return; }
+        if (accounts[username]) { showToast('ACCOUNT_EXISTS'); return; }
+        if (!password || password.length < 8) { showToast('MIN_8_CHARS'); return; }
+        if (password !== confirm) { showToast('PASSWORDS_DONT_MATCH'); return; }
+        var passwordHash = hashPassword(password);
+        accounts[username] = { username: username, passwordHash: passwordHash, createdAt: new Date().toISOString(), coins: 0, highScore: 0, ownedSkins: ['emerald'], equippedSkin: 'emerald' };
+        localStorage.setItem('snk_v14_accounts', JSON.stringify(accounts));
+        localStorage.setItem('snk_v14_logged_in_user', username);
+        isLoggedIn = true;
+        currentAccountUsername = username;
+        systemName = username;
+        coins = 0; highScore = 0; ownedSkins = ['emerald']; equippedSkin = 'emerald';
+        localStorage.setItem('snk_v14_name', systemName);
+        showToast('ACCOUNT_CREATED');
+        showMenu('online');
+    }
+
+    function onlineLoginAccount() {
+        var username = document.getElementById('online-login-user').value.toUpperCase().replace(/\s/g, '_');
+        var password = document.getElementById('online-login-pass').value;
+        if (!username || !password) { showToast('REQUIRED'); return; }
+        var account = accounts[username];
+        if (!account) { showToast('ACCOUNT_NOT_FOUND'); return; }
+        var passwordHash = hashPassword(password);
+        if (account.passwordHash !== passwordHash) { showToast('INVALID_PASSWORD'); return; }
+        isLoggedIn = true;
+        currentAccountUsername = username;
+        systemName = username;
+        coins = account.coins || 0;
+        highScore = account.highScore || 0;
+        ownedSkins = account.ownedSkins || ['emerald'];
+        equippedSkin = account.equippedSkin || 'emerald';
+        localStorage.setItem('snk_v14_logged_in_user', username);
+        localStorage.setItem('snk_v14_name', systemName);
+        localStorage.setItem('snk_v14_coins', coins);
+        showToast('LOGGED_IN');
+        showMenu('online');
+    }
+
     // Splash Screen Functions - Windows 2000 Boot Style
     function initSplash() {
         const splash = document.getElementById('splash-screen');
@@ -5442,21 +5528,21 @@
         let stepIndex = 0;
         
         var totalBlocks = 23;
+        var currentBlocks = 0;
         
-        function updateBar(progress) {
-            var blockCount = Math.round((progress / 100) * totalBlocks);
+        function updateBar(blocks) {
+            if (blocks > totalBlocks) blocks = totalBlocks;
+            currentBlocks = blocks;
             var html = '';
-            for (var i = 0; i < blockCount; i++) {
+            for (var i = 0; i < blocks; i++) {
                 html += '<span></span>';
             }
             barInner.innerHTML = html;
-            percentEl.textContent = Math.floor(progress) + '%';
         }
         
         function runStep() {
             if (stepIndex >= steps.length) {
-                updateBar(100);
-                percentEl.textContent = '100% - READY';
+                updateBar(totalBlocks);
                 setTimeout(function() {
                     splash.classList.add('hidden');
                     checkFirstLaunchAndProceed();
@@ -5484,25 +5570,25 @@
                 logEl.removeChild(logEl.firstChild);
             }
             
-            // Animate bar to target progress
-            var targetProgress = ((stepIndex + 1) / steps.length) * 100;
-            var currentProgress = (stepIndex / steps.length) * 100;
-            var animStart = Date.now();
-            var animDuration = step.duration * 0.7;
+            // Calculate target blocks for this step
+            var targetBlocks = Math.round(((stepIndex + 1) / steps.length) * totalBlocks);
             
-            function animateBar() {
-                var elapsed = Date.now() - animStart;
-                var t = Math.min(elapsed / animDuration, 1);
-                var p = currentProgress + (targetProgress - currentProgress) * t;
-                updateBar(p);
-                if (t < 1) {
-                    requestAnimationFrame(animateBar);
+            // Animate bar: add 1-3 blocks at a time, slower as progress increases
+            function tickBar() {
+                if (currentBlocks >= targetBlocks) {
+                    stepIndex++;
+                    setTimeout(runStep, 200 + Math.floor(Math.random() * 300));
+                    return;
                 }
+                var increment = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+                var next = Math.min(currentBlocks + increment, targetBlocks);
+                updateBar(next);
+                // Delay gets longer as we progress
+                var progress = currentBlocks / totalBlocks;
+                var delay = 80 + Math.floor(progress * 350) + Math.floor(Math.random() * 150);
+                setTimeout(tickBar, delay);
             }
-            animateBar();
-            
-            stepIndex++;
-            setTimeout(runStep, step.duration + Math.floor(Math.random() * 400));
+            tickBar();
         }
         
         runStep();
