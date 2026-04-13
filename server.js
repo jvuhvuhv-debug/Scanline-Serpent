@@ -12,6 +12,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { WebSocketServer } = require('ws');
 
 // ============================================
 //  ANTICHEAT CONFIG — MODIFY THESE VALUES
@@ -103,88 +104,18 @@ function start(port, gameDir) {
         });
     });
 
-    // --- WebSocket (RFC 6455, zero dependencies) ---
-    function acceptWebSocket(req, socket) {
-        const key = req.headers['sec-websocket-key'];
-        const accept = crypto
-            .createHash('sha1')
-            .update(key + '258EAFA5-E914-47DA-95CA-5AB940E35C9A')
-            .digest('base64');
-
-        socket.write(
-            'HTTP/1.1 101 Switching Protocols\r\n' +
-            'Upgrade: websocket\r\n' +
-            'Connection: Upgrade\r\n' +
-            'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
-        );
-        return socket;
-    }
-
-    function decodeFrame(buf) {
-        if (buf.length < 2) return null;
-        const opcode = buf[0] & 0x0f;
-        if (opcode === 0x8) return { opcode: 0x8, data: null, totalLen: 2 };
-        if (opcode === 0x9) return { opcode: 0x9, data: null, totalLen: 2 };
-        const masked = (buf[1] & 0x80) !== 0;
-        let payloadLen = buf[1] & 0x7f;
-        let offset = 2;
-        if (payloadLen === 126) {
-            if (buf.length < 4) return null;
-            payloadLen = buf.readUInt16BE(2);
-            offset = 4;
-        } else if (payloadLen === 127) {
-            if (buf.length < 10) return null;
-            payloadLen = Number(buf.readBigUInt64BE(2));
-            offset = 10;
-        }
-        let maskKey = null;
-        if (masked) {
-            if (buf.length < offset + 4) return null;
-            maskKey = buf.slice(offset, offset + 4);
-            offset += 4;
-        }
-        if (buf.length < offset + payloadLen) return null;
-        let payload = buf.slice(offset, offset + payloadLen);
-        if (masked) {
-            for (let i = 0; i < payload.length; i++) {
-                payload[i] ^= maskKey[i % 4];
-            }
-        }
-        return { opcode, data: payload.toString('utf8'), totalLen: offset + payloadLen };
-    }
-
-    function encodeFrame(text) {
-        const payload = Buffer.from(text, 'utf8');
-        let header;
-        if (payload.length < 126) {
-            header = Buffer.alloc(2);
-            header[0] = 0x81;
-            header[1] = payload.length;
-        } else if (payload.length < 65536) {
-            header = Buffer.alloc(4);
-            header[0] = 0x81;
-            header[1] = 126;
-            header.writeUInt16BE(payload.length, 2);
-        } else {
-            header = Buffer.alloc(10);
-            header[0] = 0x81;
-            header[1] = 127;
-            header.writeBigUInt64BE(BigInt(payload.length), 2);
-        }
-        return Buffer.concat([header, payload]);
-    }
-
+    // --- WebSocket via 'ws' package (works behind reverse proxies) ---
     function wsSend(socket, obj) {
-        try { socket.write(encodeFrame(JSON.stringify(obj))); } catch (e) {}
+        try { if (socket.readyState === 1) socket.send(JSON.stringify(obj)); } catch (e) {}
     }
 
     function broadcastRoom(roomCode, msg, excludeId) {
         const room = rooms[roomCode];
         if (!room) return;
-        const frame = encodeFrame(JSON.stringify(msg));
+        const data = JSON.stringify(msg);
         Object.keys(room.players).forEach(function (pid) {
             if (pid === excludeId) return;
-            try { room.players[pid].ws.write(frame); } catch (e) {}
+            try { if (room.players[pid].ws.readyState === 1) room.players[pid].ws.send(data); } catch (e) {}
         });
     }
 
@@ -304,14 +235,14 @@ function start(port, gameDir) {
 
             if (ANTICHEAT.penalty === 'kick') {
                 wsSend(ws, { type: 'acViolation', reason: violations[0] });
-                ws.end();
+                ws.close();
                 return false;
             } else if (ANTICHEAT.penalty === 'warn') {
                 pd.warnings++;
                 wsSend(ws, { type: 'acWarning', reason: violations[0], warnings: pd.warnings, max: ANTICHEAT.maxWarnings });
                 if (pd.warnings >= ANTICHEAT.maxWarnings) {
                     wsSend(ws, { type: 'acViolation', reason: 'MAX_WARNINGS_REACHED' });
-                    ws.end();
+                    ws.close();
                     return false;
                 }
             }
@@ -324,67 +255,41 @@ function start(port, gameDir) {
     // ============================================
     //  WEBSOCKET CONNECTION HANDLER
     // ============================================
+    const wss = new WebSocketServer({ noServer: true });
+
     server.on('upgrade', function (req, socket, head) {
         if (req.url !== '/ws') {
             socket.destroy();
             return;
         }
-        acceptWebSocket(req, socket);
+        wss.handleUpgrade(req, socket, head, function (ws) {
+            wss.emit('connection', ws, req);
+        });
+    });
 
+    wss.on('connection', function (ws) {
         const playerId = generateId();
         let playerRoom = null;
-        let buf = Buffer.alloc(0);
 
-        socket.on('data', function (chunk) {
-            buf = Buffer.concat([buf, chunk]);
-            while (true) {
-                const frame = decodeFrame(buf);
-                if (!frame) break;
-                buf = buf.slice(frame.totalLen || buf.length);
+        ws.on('message', function (raw) {
+            let msg;
+            try { msg = JSON.parse(raw.toString()); } catch (e) { return; }
 
-                if (frame.opcode === 0x8) {
-                    socket.end();
-                    return;
-                }
-                if (frame.opcode === 0x9) {
-                    const pong = Buffer.alloc(2);
-                    pong[0] = 0x8a; pong[1] = 0;
-                    socket.write(pong);
-                    continue;
-                }
+            // Anticheat check
+            if (!checkAnticheat(playerId, msg, ws, playerRoom)) return;
 
-                let msg;
-                try { msg = JSON.parse(frame.data); } catch (e) { continue; }
-
-                // Anticheat check
-                if (!checkAnticheat(playerId, msg, socket, playerRoom)) return;
-
-                handleMessage(playerId, socket, msg);
-            }
-        });
-
-        socket.on('close', function () {
-            if (playerRoom) removePlayerFromRoom(playerRoom, playerId);
-            delete playerData[playerId];
-        });
-
-        socket.on('error', function () {
-            if (playerRoom) removePlayerFromRoom(playerRoom, playerId);
-            delete playerData[playerId];
-        });
-
-        function handleMessage(pid, ws, msg) {
+            // --- handleMessage ---
             if (msg.type === 'createRoom') {
                 const code = msg.code;
                 if (rooms[code]) {
                     wsSend(ws, { type: 'error', msg: 'ROOM_CODE_IN_USE' });
                     return;
                 }
-                rooms[code] = { host: pid, timer: 60, players: {} };
-                rooms[code].players[pid] = { ws: ws, name: msg.name || 'HOST', alive: true, snake: [], skin: 'emerald', score: 0 };
+                rooms[code] = { host: playerId, timer: 60, players: {} };
+                rooms[code].players[playerId] = { ws: ws, name: msg.name || 'HOST', alive: true, snake: [], skin: 'emerald', score: 0 };
                 playerRoom = code;
-                initPlayerAC(pid);
-                wsSend(ws, { type: 'roomCreated', code: code, pid: pid, isHost: true });
+                initPlayerAC(playerId);
+                wsSend(ws, { type: 'roomCreated', code: code, pid: playerId, isHost: true });
 
             } else if (msg.type === 'joinRoom') {
                 const code = msg.code;
@@ -392,37 +297,36 @@ function start(port, gameDir) {
                     wsSend(ws, { type: 'error', msg: 'ROOM_NOT_FOUND' });
                     return;
                 }
-                rooms[code].players[pid] = { ws: ws, name: msg.name || 'PLAYER', alive: true, snake: [], skin: 'emerald', score: 0 };
+                rooms[code].players[playerId] = { ws: ws, name: msg.name || 'PLAYER', alive: true, snake: [], skin: 'emerald', score: 0 };
                 playerRoom = code;
-                initPlayerAC(pid);
-                wsSend(ws, { type: 'roomJoined', code: code, pid: pid, isHost: false, timer: rooms[code].timer });
+                initPlayerAC(playerId);
+                wsSend(ws, { type: 'roomJoined', code: code, pid: playerId, isHost: false, timer: rooms[code].timer });
                 broadcastRoom(code, { type: 'playerList', players: getPlayerList(code) });
 
             } else if (msg.type === 'timerSet') {
                 const room = rooms[playerRoom];
-                if (!room || room.host !== pid) return;
+                if (!room || room.host !== playerId) return;
                 room.timer = msg.seconds;
-                broadcastRoom(playerRoom, { type: 'timerSet', seconds: msg.seconds }, pid);
+                broadcastRoom(playerRoom, { type: 'timerSet', seconds: msg.seconds }, playerId);
 
             } else if (msg.type === 'startGame') {
                 const room = rooms[playerRoom];
-                if (!room || room.host !== pid) return;
+                if (!room || room.host !== playerId) return;
                 Object.keys(room.players).forEach(function (p) {
                     room.players[p].alive = true;
                     room.players[p].score = 0;
-                    // Reset anticheat tracking for new round
                     if (playerData[p]) {
                         playerData[p].lastScore = 0;
                         playerData[p].lastSnakeHead = null;
                         playerData[p].warnings = 0;
                     }
                 });
-                broadcastRoom(playerRoom, { type: 'startGame', mode: msg.mode }, pid);
+                broadcastRoom(playerRoom, { type: 'startGame', mode: msg.mode }, playerId);
 
             } else if (msg.type === 'sync') {
                 const room = rooms[playerRoom];
                 if (!room) return;
-                var p = room.players[pid];
+                var p = room.players[playerId];
                 if (p) {
                     p.snake = msg.snake || [];
                     p.skin = msg.skin || 'emerald';
@@ -430,16 +334,16 @@ function start(port, gameDir) {
                     p.alive = msg.alive !== false;
                 }
                 broadcastRoom(playerRoom, {
-                    type: 'sync', pid: pid,
+                    type: 'sync', pid: playerId,
                     snake: msg.snake, skin: msg.skin,
                     score: msg.score, name: msg.name, alive: msg.alive
-                }, pid);
+                }, playerId);
 
             } else if (msg.type === 'eliminated') {
                 const room = rooms[playerRoom];
                 if (!room) return;
-                if (room.players[pid]) room.players[pid].alive = false;
-                broadcastRoom(playerRoom, { type: 'playerDied', pid: pid });
+                if (room.players[playerId]) room.players[playerId].alive = false;
+                broadcastRoom(playerRoom, { type: 'playerDied', pid: playerId });
                 var aliveCount = 0;
                 Object.keys(room.players).forEach(function (p) {
                     if (room.players[p].alive) aliveCount++;
@@ -455,7 +359,7 @@ function start(port, gameDir) {
 
             } else if (msg.type === 'timerExpired') {
                 const room = rooms[playerRoom];
-                if (!room || room.host !== pid) return;
+                if (!room || room.host !== playerId) return;
                 var scores = [];
                 Object.keys(room.players).forEach(function (p) {
                     scores.push({ name: room.players[p].name, score: room.players[p].score, alive: room.players[p].alive });
@@ -464,15 +368,25 @@ function start(port, gameDir) {
                 broadcastRoom(playerRoom, { type: 'gameEnd', reason: 'timer', scores: scores });
 
             } else if (msg.type === 'timerSync') {
-                broadcastRoom(playerRoom, { type: 'timerSync', remaining: msg.remaining }, pid);
+                broadcastRoom(playerRoom, { type: 'timerSync', remaining: msg.remaining }, playerId);
 
             } else if (msg.type === 'leave') {
                 if (playerRoom) {
-                    removePlayerFromRoom(playerRoom, pid);
+                    removePlayerFromRoom(playerRoom, playerId);
                     playerRoom = null;
                 }
             }
-        }
+        });
+
+        ws.on('close', function () {
+            if (playerRoom) removePlayerFromRoom(playerRoom, playerId);
+            delete playerData[playerId];
+        });
+
+        ws.on('error', function () {
+            if (playerRoom) removePlayerFromRoom(playerRoom, playerId);
+            delete playerData[playerId];
+        });
     });
 
     server.listen(port, '0.0.0.0', function () {
