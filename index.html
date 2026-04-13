@@ -3127,9 +3127,11 @@
         spectatingIndex = 0;
         hideSpectatorBar();
 
-        // Reset alive status for all players
+        // Reset alive status and clear old snake data for all players
         Object.keys(onlinePlayers).forEach(function(pid) {
             onlinePlayers[pid].alive = true;
+            onlinePlayers[pid].snake = [];
+            onlinePlayers[pid].score = 0;
         });
 
         startGame(mode);
@@ -3211,6 +3213,11 @@
         clearInterval(gameLoop);
         if (gameLoopAnimationId) cancelAnimationFrame(gameLoopAnimationId);
         isPaused = true;
+
+        // Clear all online player snakes so ghosts don't linger
+        Object.keys(onlinePlayers).forEach(function(pid) {
+            onlinePlayers[pid].snake = [];
+        });
 
         var goMenu = document.getElementById('game-over-menu');
         if (goMenu) goMenu.classList.add('hidden');
