@@ -1108,6 +1108,7 @@
                 <div id="splash-bar-inner"></div>
             </div>
             <div id="splash-percent">0%</div>
+            <div id="splash-build-id" style="color: var(--accent); font-size: 0.65rem; letter-spacing: 3px; margin-top: 14px; opacity: 0.5;">BUILD_ID<br><span id="splash-build-code" style="font-size: 0.85rem; letter-spacing: 4px; opacity: 0.8;">------</span></div>
         </div>
 
         <!-- Main Menu -->
@@ -2919,14 +2920,22 @@
                 resolve(onlineWs);
                 return;
             }
+            // Close any stale connection
+            if (onlineWs) {
+                try { onlineWs.close(); } catch(e) {}
+                onlineWs = null;
+            }
             // Wake server with HTTP ping first (Render cold start)
             if (attempt === 1) {
                 showToast('WAKING_SERVER...');
                 fetch(MULTIPLAYER_SERVER.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '/'))
                     .catch(function(){});
             }
+            var settled = false;
             var ws = new WebSocket(getWsUrl());
             var timeout = setTimeout(function() {
+                if (settled) return;
+                settled = true;
                 ws.close();
                 if (attempt < maxAttempts) {
                     showToast('SERVER_WAKING_UP... RETRY ' + attempt + '/' + maxAttempts);
@@ -2936,6 +2945,8 @@
                 }
             }, 30000);
             ws.onopen = function() {
+                if (settled) return;
+                settled = true;
                 clearTimeout(timeout);
                 onlineWs = ws;
                 showToast('CONNECTED');
@@ -2943,24 +2954,28 @@
             };
             ws.onclose = function() {
                 clearTimeout(timeout);
-                onlineWs = null;
-                if (isOnlineMode) {
+                if (onlineWs === ws) onlineWs = null;
+                if (isOnlineMode && settled) {
                     showToast('DISCONNECTED_FROM_SERVER');
                     isOnlineMode = false;
+                    onlineMatchActive = false;
+                    onlinePlayers = {};
                     stopOnlineSync();
                     stopOnlineTimer();
                 }
+                if (!settled) {
+                    settled = true;
+                    if (attempt < maxAttempts) {
+                        setTimeout(function() {
+                            connectToServer(attempt + 1).then(resolve).catch(reject);
+                        }, 2000);
+                    } else {
+                        reject(new Error('SERVER_UNREACHABLE'));
+                    }
+                }
             };
             ws.onerror = function() {
-                clearTimeout(timeout);
-                if (attempt < maxAttempts) {
-                    showToast('RETRYING... ' + attempt + '/' + maxAttempts);
-                    setTimeout(function() {
-                        connectToServer(attempt + 1).then(resolve).catch(reject);
-                    }, 2000);
-                } else {
-                    reject(new Error('SERVER_UNREACHABLE'));
-                }
+                // onclose will fire after onerror, let onclose handle retry
             };
             ws.onmessage = function(evt) {
                 var data;
@@ -3885,6 +3900,7 @@
         // Draw online ghost players
         if (isOnlineMode) {
             Object.keys(onlinePlayers).forEach(function(pid) {
+                if (pid === onlinePlayerId) return; // Never draw self
                 var p = onlinePlayers[pid];
                 if (!p.snake || p.snake.length === 0) return;
                 var isDead = p.alive === false;
@@ -5490,12 +5506,19 @@
     }
 
     // Splash Screen Functions - Windows 2000 Boot Style
+    // Build ID — change this string manually each version (6 chars, letters+numbers)
+    var BUILD_ID = '6FG8CV';
+
     function initSplash() {
         const splash = document.getElementById('splash-screen');
         if (!splash) {
             checkFirstLaunchAndProceed();
             return;
         }
+
+        // Set build code on splash
+        var buildCodeEl = document.getElementById('splash-build-code');
+        if (buildCodeEl) buildCodeEl.textContent = BUILD_ID;
         
         const logEl = document.getElementById('splash-log');
         const barInner = document.getElementById('splash-bar-inner');
