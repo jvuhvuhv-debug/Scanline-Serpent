@@ -99,6 +99,7 @@
             z-index: 10; 
             padding: 15px 20px; 
             box-sizing: border-box; 
+            overflow-y: auto;
 
             text-align: center; 
             padding-top: 20px;
@@ -579,15 +580,16 @@
             display: flex; 
             justify-content: space-between; 
             width: 250px; 
-            margin: 5px 0; 
+            margin: 5px auto; 
             background: #051005; 
             border: 1px solid #114411;
             padding: 10px; 
             border-radius: 4px; 
             cursor: pointer; 
+            color: var(--text);
         }
 
-        .key-bind:hover { border-color: var(--accent); }
+        .key-bind:hover { border-color: var(--accent); background: #0a1f0a; }
 
         /* Toast Notification */
         #toast-container {
@@ -756,7 +758,7 @@
         
         .control-label { font-size: 0.9rem; }
         
-        #keybind-list { max-height: 150px; overflow-y: auto; }
+        #keybind-list { max-height: 260px; overflow-y: auto; }
         
         .username-input { background: #000; color: var(--accent); border: 1px solid #114411; padding: 5px; width: 120px; }
         
@@ -1094,7 +1096,7 @@
     </div>
 
     <div id="game-container">
-        <button id="pause-btn" class="menu-btn" onclick="pauseGame()">PAUSE [ESC]</button>
+        <button id="pause-btn" class="menu-btn" onclick="pauseGame()">PAUSE</button>
         <div id="online-timer">05:00</div>
         <div id="online-alive-count">ALIVE: 1/1</div>
         <div id="spectator-bar">
@@ -1384,7 +1386,14 @@
             <!-- Input Tab -->
             <div id="input-tab" class="settings-tab-content">
                 <h3 class="input-header">INPUT_MAPPING</h3>
-                <div id="keybind-list"></div>
+                <p style="color:#1a5c35; font-size:0.7rem; margin-bottom:8px;">CLICK_TO_REBIND // PRESS_ANY_KEY_TO_ASSIGN</p>
+                <div id="keybind-list">
+                    <div class="key-bind" onclick="startBinding('UP')"><span>MOVE_UP</span><span style="color:var(--accent); font-weight: bold;">ArrowUp</span></div>
+                    <div class="key-bind" onclick="startBinding('DOWN')"><span>MOVE_DOWN</span><span style="color:var(--accent); font-weight: bold;">ArrowDown</span></div>
+                    <div class="key-bind" onclick="startBinding('LEFT')"><span>MOVE_LEFT</span><span style="color:var(--accent); font-weight: bold;">ArrowLeft</span></div>
+                    <div class="key-bind" onclick="startBinding('RIGHT')"><span>MOVE_RIGHT</span><span style="color:var(--accent); font-weight: bold;">ArrowRight</span></div>
+                    <div class="key-bind" onclick="startBinding('PAUSE')"><span>PAUSE_GAME</span><span style="color:var(--accent); font-weight: bold;">Escape</span></div>
+                </div>
             </div>
 
             <!-- Account Tab -->
@@ -1881,7 +1890,7 @@
     let ownedSkins = (() => { try { const val = JSON.parse(localStorage.getItem('snk_v14_owned')); return val || ['emerald']; } catch(e) { return ['emerald']; } })();
     let equippedSkin = localStorage.getItem('snk_v14_equipped') || 'emerald';
     
-    let keys = (() => { try { const val = JSON.parse(localStorage.getItem('snk_v14_keys')); return val || { UP: 'ArrowUp', DOWN: 'ArrowDown', LEFT: 'ArrowLeft', RIGHT: 'ArrowRight' }; } catch(e) { return { UP: 'ArrowUp', DOWN: 'ArrowDown', LEFT: 'ArrowLeft', RIGHT: 'ArrowRight' }; } })();
+    let keys = (() => { var def = { UP: 'ArrowUp', DOWN: 'ArrowDown', LEFT: 'ArrowLeft', RIGHT: 'ArrowRight', PAUSE: 'Escape' }; try { var val = JSON.parse(localStorage.getItem('snk_v14_keys')); if (!val) return def; if (!val.PAUSE) val.PAUSE = 'Escape'; return val; } catch(e) { return def; } })();
     let bindingKey = null;
     let weeklyTimerInterval = null;
 
@@ -2435,6 +2444,7 @@
         if(id === 'friends') renderFriendsList();
         if(id === 'online') refreshPublicGames();
         if(id === 'settings') {
+            try {
             document.getElementById('volume-main').value = Math.floor(masterVolume * 100);
             document.getElementById('vol-main-label').innerText = Math.floor(masterVolume * 100) + '%';
             document.getElementById('volume-sfx').value = Math.floor(sfxVolume * 100);
@@ -2481,6 +2491,7 @@
             }
             document.getElementById('replay-toggle').checked = replayEnabled;
             updateAccountDisplay();
+            } catch(e) { console.error('Settings init error:', e); }
             renderKeybinds();
             // Reset to video tab
             document.getElementById('video-tab').classList.add('active');
@@ -2863,16 +2874,25 @@
        ======================================== */
     function renderKeybinds() {
         const list = document.getElementById('keybind-list');
-        list.innerHTML = Object.entries(keys).map(([dir, key]) => `
-            <div class="key-bind" onclick="startBinding('${dir}')">
-                <span>${dir}</span>
-                <span style="color:var(--accent); font-weight: bold;">${bindingKey === dir ? '[WAITING...]' : key}</span>
-            </div>
-
-        `).join('');
+        var labelMap = { UP: 'MOVE_UP', DOWN: 'MOVE_DOWN', LEFT: 'MOVE_LEFT', RIGHT: 'MOVE_RIGHT', PAUSE: 'PAUSE_GAME' };
+        list.innerHTML = Object.entries(keys).map(([dir, key]) => {
+                var displayKey = key === ' ' ? 'Space' : key;
+                return '<div class="key-bind" onclick="startBinding(\'' + dir + '\')">' +
+                    '<span>' + (labelMap[dir] || dir) + '</span>' +
+                    '<span style="color:var(--accent); font-weight: bold;">' + (bindingKey === dir ? '[WAITING...]' : displayKey) + '</span>' +
+                '</div>';
+            }).join('');
     }
 
     function startBinding(dir) { bindingKey = dir; renderKeybinds(); }
+
+    function updatePauseButtonLabel() {
+        var btn = document.getElementById('pause-btn');
+        if (btn) {
+            var k = keys.PAUSE === ' ' ? 'Space' : (keys.PAUSE || 'Escape');
+            btn.textContent = 'PAUSE [' + k.toUpperCase() + ']';
+        }
+    }
 
     function quitGame() {
         showMenu('quit');
@@ -3363,6 +3383,10 @@
         document.getElementById('online-timer').style.display = 'none';
         document.getElementById('online-alive-count').style.display = 'none';
         hideSpectatorBar();
+
+        // Clear the canvas so old frame content doesn't linger
+        ctx.fillStyle = "#020802";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     function hideOnlineResult() {
@@ -3637,6 +3661,8 @@
 
     function updateGameLogic() {
         if(isPaused) return;
+        // Skip game logic if eliminated in online mode (spectating only)
+        if(isOnlineMode && onlineEliminated) return;
         
         direction = nextDir;
         let head = { ...snake[0] };
@@ -3881,7 +3907,7 @@
                 // Draw HIDDEN BOX (brown) for collision detection - invisible but killable
                 // No rendering - it's invisible but collision detection above will catch it
             }
-        } else {
+        } else if (food) {
             // OTHER MODES: Normal food rendering
             const foodColor = activeMode === 'cheese' ? '#FF8C00' : '#ff4d4d';
             if (foodGlowIntensity > 0) {
@@ -4041,10 +4067,9 @@
             onlinePlayerDied();
             showToast('YOU_HAVE_BEEN_ELIMINATED');
             // Don't stop the game loop — keep rendering so player can spectate
-            // Clear local snake but keep drawing others
+            // Clear local snake but keep food so draw() doesn't crash
             snake = [];
             cloneSnake = [];
-            food = null;
             return;
         }
 
@@ -4157,12 +4182,57 @@
     // Preload bite sound
     const biteAudio = new Audio('sounds/0410 (1).MP3');
     biteAudio.preload = 'auto';
+    let biteAudioLoaded = false;
+    biteAudio.addEventListener('canplaythrough', () => { biteAudioLoaded = true; });
+    biteAudio.addEventListener('error', () => { biteAudioLoaded = false; });
+
+    function playCrunchSound() {
+        initAudio();
+        const t = audioContext.currentTime;
+        const vol = sfxVolume * masterVolume;
+        // Noise burst for crunch texture
+        const bufLen = Math.floor(audioContext.sampleRate * 0.12);
+        const buf = audioContext.createBuffer(1, bufLen, audioContext.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / bufLen);
+        const noise = audioContext.createBufferSource();
+        noise.buffer = buf;
+        // Bandpass filter for crunchy character
+        const bp = audioContext.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 2500;
+        bp.Q.value = 1.2;
+        const g = audioContext.createGain();
+        g.gain.setValueAtTime(vol * 0.6, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        noise.connect(bp);
+        bp.connect(g);
+        g.connect(audioContext.destination);
+        noise.start(t);
+        noise.stop(t + 0.12);
+        // Pop tone for bite impact
+        const osc = audioContext.createOscillator();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.exponentialRampToValueAtTime(150, t + 0.08);
+        const g2 = audioContext.createGain();
+        g2.gain.setValueAtTime(vol * 0.4, t);
+        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+        osc.connect(g2);
+        g2.connect(audioContext.destination);
+        osc.start(t);
+        osc.stop(t + 0.08);
+    }
 
     function playCollectSound() {
         if(sfxVolume === 0) return;
-        const sound = biteAudio.cloneNode();
-        sound.volume = sfxVolume * masterVolume;
-        sound.play().catch(() => {});
+        try {
+            var sound = new Audio('sounds/0410 (1).MP3');
+            sound.volume = sfxVolume * masterVolume;
+            sound.play().catch(function() { playCrunchSound(); });
+        } catch(e) {
+            playCrunchSound();
+        }
     }
 
     function playGameOverSound() {
@@ -5370,6 +5440,7 @@
         
         // Show main menu
         showMenu('main');
+        updatePauseButtonLabel();
     }
 
 
@@ -5388,6 +5459,9 @@
         
         // Mark button as active
         event.target.classList.add('active');
+
+        // Refresh keybinds when switching to input tab
+        if (tab === 'input') renderKeybinds();
     }
 
     // Pause menu
@@ -5479,11 +5553,11 @@
         
         if(bindingKey) {
             keys[bindingKey] = e.key; saveData();
-            bindingKey = null; renderKeybinds(); return;
+            bindingKey = null; renderKeybinds(); updatePauseButtonLabel(); return;
         }
 
-        // Pause menu with Escape key
-        if(e.key === 'Escape' && !isPaused && !isPlayingReplay) {
+        // Pause menu with mapped pause key
+        if(e.key === keys.PAUSE && !isPaused && !isPlayingReplay) {
             pauseGame();
             return;
         }
@@ -5584,7 +5658,7 @@
 
     // Splash Screen Functions - Windows 2000 Boot Style
     // Build ID — change this string manually each version (6 chars, letters+numbers)
-    var BUILD_ID = '6FG8CV';
+    var BUILD_ID = 'X9KP2W';
 
     function initSplash() {
         const splash = document.getElementById('splash-screen');
