@@ -84,6 +84,8 @@
         
         canvas { display: block; filter: blur(0.4px); }
         
+        button, .menu-btn, input[type="button"], input[type="submit"] { border-radius: 0 !important; }
+
         /* Overlays for Menus */
         .overlay { 
             position: absolute; 
@@ -104,6 +106,7 @@
             text-align: center; 
             padding-top: 20px;
         }
+        #main-menu { overflow-y: hidden; }
         
         .hidden { display: none !important; }
         
@@ -112,11 +115,11 @@
             background: #0a2e1a; 
             color: var(--accent); 
             border: 2px solid var(--accent); 
-            padding: 10px; 
+            padding: 6px; 
             margin: 2px; 
             cursor: pointer; 
             border-radius: 4px; 
-            width: 200px; 
+            width: 192px; 
             font-weight: bold; 
             transition: all 0.2s; 
             font-size: 0.9rem; 
@@ -221,16 +224,16 @@
         
         /* Main Menu Buttons Container */
         .main-menu-buttons {
-            width: 220px;
+            width: 230px;
             padding: 0;
             margin: 5px 0;
         }
         
         .main-menu-buttons .small-btn {
-            width: 220px;
+            width: 245px;
             padding: 9px;
-            font-size: 0.80rem;
-            margin: 3px;
+            font-size: 0.86rem;
+            margin: 2px;
         }
         
         .main-menu-buttons .quit-btn {
@@ -1610,7 +1613,7 @@
 <!-- FPS Counter -->
 <div id="fps-counter">0 FPS</div>
 
-<div class="version-tag">ONLINE TEST 1.1</div>
+<div class="version-tag">ONLINE TEST 1.3</div>
 
 <!-- Multiplayer uses server.js WebSocket - no external dependency needed -->
 <script>
@@ -1619,8 +1622,8 @@
     const SB_BOARD_ID = "d5728bb2-c673-4925-a093-08de7adf9909";
     const SB_BASE_URL = "https://api.simpleboards.dev/api/entries";
     const SB_AUTH_MARKER = "AUTH_ACCOUNT_DO_NOT_DELETE";
-    const GAME_VERSION = "1.0";
-    const REQUIRED_VERSION = "1.0";
+    const GAME_VERSION = "1.3";
+    const REQUIRED_VERSION = "1.3";
 
     // Cloud-based authentication functions using leaderboard API
     async function saveAccountToCloud(username, passwordHash) {
