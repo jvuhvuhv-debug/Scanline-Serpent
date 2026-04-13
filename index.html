@@ -2889,17 +2889,34 @@
         return MULTIPLAYER_SERVER;
     }
 
-    function connectToServer() {
+    function connectToServer(attempt) {
+        attempt = attempt || 1;
+        var maxAttempts = 3;
         return new Promise(function(resolve, reject) {
             if (onlineWs && onlineWs.readyState === WebSocket.OPEN) {
                 resolve(onlineWs);
                 return;
             }
+            // Wake server with HTTP ping first (Render cold start)
+            if (attempt === 1) {
+                showToast('WAKING_SERVER...');
+                fetch(MULTIPLAYER_SERVER.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '/'))
+                    .catch(function(){});
+            }
             var ws = new WebSocket(getWsUrl());
-            var timeout = setTimeout(function() { ws.close(); reject(new Error('WS_TIMEOUT — server may be waking up, try again')); }, 45000);
+            var timeout = setTimeout(function() {
+                ws.close();
+                if (attempt < maxAttempts) {
+                    showToast('SERVER_WAKING_UP... RETRY ' + attempt + '/' + maxAttempts);
+                    connectToServer(attempt + 1).then(resolve).catch(reject);
+                } else {
+                    reject(new Error('SERVER_UNREACHABLE'));
+                }
+            }, 30000);
             ws.onopen = function() {
                 clearTimeout(timeout);
                 onlineWs = ws;
+                showToast('CONNECTED');
                 resolve(ws);
             };
             ws.onclose = function() {
@@ -2914,7 +2931,14 @@
             };
             ws.onerror = function() {
                 clearTimeout(timeout);
-                reject(new Error('WS_ERROR'));
+                if (attempt < maxAttempts) {
+                    showToast('RETRYING... ' + attempt + '/' + maxAttempts);
+                    setTimeout(function() {
+                        connectToServer(attempt + 1).then(resolve).catch(reject);
+                    }, 2000);
+                } else {
+                    reject(new Error('SERVER_UNREACHABLE'));
+                }
             };
             ws.onmessage = function(evt) {
                 var data;
@@ -2936,8 +2960,7 @@
         connectToServer().then(function() {
             wsSend({ type: 'createRoom', code: onlineRoomCode, name: systemName });
         }).catch(function(err) {
-            console.error('WS connect failed:', err);
-            showToast('SERVER_OFFLINE: ' + (err.message || err));
+            showToast('SERVER_UNREACHABLE — try again in 30s');
         });
     }
 
@@ -2952,7 +2975,7 @@
         connectToServer().then(function() {
             wsSend({ type: 'joinRoom', code: code, name: systemName });
         }).catch(function() {
-            showToast('SERVER_OFFLINE — Run: node server.js');
+            showToast('SERVER_UNREACHABLE — try again in 30s');
         });
     }
 
