@@ -1,3 +1,6 @@
+// Track highest version seen
+let highestVersion = null;
+
 /**
  * SCANLINE SERPENT — WebSocket Multiplayer Server + Anticheat
  * 
@@ -56,6 +59,9 @@ const ANTICHEAT = {
 
 const rooms = {};
 const playerData = {};  // playerId -> anticheat tracking data
+
+// In-memory account storage: username -> { passwordHash }
+const accounts = {};
 
 function generateId() {
     return crypto.randomBytes(8).toString('hex');
@@ -124,7 +130,7 @@ function start(port, gameDir) {
         if (!room) return {};
         const list = {};
         Object.keys(room.players).forEach(function (pid) {
-            list[pid] = { name: room.players[pid].name };
+            list[pid] = { name: room.players[pid].name, ready: room.players[pid].ready || false };
         });
         return list;
     }
@@ -256,6 +262,7 @@ function start(port, gameDir) {
     //  WEBSOCKET CONNECTION HANDLER
     // ============================================
     const wss = new WebSocketServer({ noServer: true });
+    const activeSessions = {};  // username -> { ws, playerId, room }
 
     server.on('upgrade', function (req, socket, head) {
         if (req.url !== '/ws') {
@@ -268,12 +275,85 @@ function start(port, gameDir) {
     });
 
     wss.on('connection', function (ws) {
+        let clientVersion = null;
         const playerId = generateId();
         let playerRoom = null;
+        let playerName = null;
+
+        function registerSession(name) {
+            playerName = name;
+            if (!name) return;
+            var existing = activeSessions[name];
+            if (existing && existing.ws !== ws && existing.ws.readyState === 1) {
+                wsSend(existing.ws, { type: 'kicked', reason: 'LOGGED_IN_ELSEWHERE' });
+                existing.ws.close();
+            }
+            activeSessions[name] = { ws: ws, playerId: playerId, room: playerRoom };
+        }
 
         ws.on('message', function (raw) {
             let msg;
             try { msg = JSON.parse(raw.toString()); } catch (e) { return; }
+            // Version handshake: first message must be {type: 'version', version: 'x.y'}
+            if (!clientVersion) {
+                if (msg.type === 'version' && typeof msg.version === 'string') {
+                    clientVersion = msg.version;
+                    if (!highestVersion || compareVersions(clientVersion, highestVersion) > 0) {
+                        highestVersion = clientVersion;
+                    }
+                    if (compareVersions(clientVersion, highestVersion) < 0) {
+                        wsSend(ws, { type: 'versionError', required: highestVersion });
+                        ws.close();
+                        return;
+                    }
+                    return; // Wait for next message
+                } else {
+                    wsSend(ws, { type: 'versionError', required: highestVersion || 'latest' });
+                    ws.close();
+                    return;
+                }
+            }
+        // Compare version strings like '1.3.2' > '1.2.9'
+        function compareVersions(a, b) {
+            const pa = a.split('.').map(Number);
+            const pb = b.split('.').map(Number);
+            for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                const na = pa[i] || 0, nb = pb[i] || 0;
+                if (na > nb) return 1;
+                if (na < nb) return -1;
+            }
+            return 0;
+        }
+
+            // Account creation
+            if (msg.type === 'createAccount') {
+                const { username, passwordHash } = msg;
+                if (!username || !passwordHash) {
+                    wsSend(ws, { type: 'accountCreate', success: false, error: 'MISSING_FIELDS' });
+                    return;
+                }
+                if (accounts[username]) {
+                    wsSend(ws, { type: 'accountCreate', success: false, error: 'USERNAME_TAKEN' });
+                    return;
+                }
+                accounts[username] = { passwordHash };
+                wsSend(ws, { type: 'accountCreate', success: true });
+                return;
+            }
+            // Account login
+            if (msg.type === 'loginAccount') {
+                const { username, passwordHash } = msg;
+                if (!username || !passwordHash) {
+                    wsSend(ws, { type: 'accountLogin', success: false, error: 'MISSING_FIELDS' });
+                    return;
+                }
+                if (!accounts[username] || accounts[username].passwordHash !== passwordHash) {
+                    wsSend(ws, { type: 'accountLogin', success: false, error: 'INVALID_CREDENTIALS' });
+                    return;
+                }
+                wsSend(ws, { type: 'accountLogin', success: true });
+                return;
+            }
 
             // Anticheat check
             if (!checkAnticheat(playerId, msg, ws, playerRoom)) return;
@@ -285,10 +365,11 @@ function start(port, gameDir) {
                     wsSend(ws, { type: 'error', msg: 'ROOM_CODE_IN_USE' });
                     return;
                 }
-                rooms[code] = { host: playerId, timer: 60, players: {}, isPublic: msg.isPublic !== false, hostName: msg.name || 'HOST', inGame: false };
-                rooms[code].players[playerId] = { ws: ws, name: msg.name || 'HOST', alive: true, snake: [], skin: 'emerald', score: 0 };
+                rooms[code] = { host: playerId, timer: 60, players: {}, isPublic: msg.isPublic !== false, hostName: msg.name || 'HOST', inGame: false, selectedMode: 'classic' };
+                rooms[code].players[playerId] = { ws: ws, name: msg.name || 'HOST', alive: true, snake: [], skin: 'emerald', score: 0, ready: false };
                 playerRoom = code;
                 initPlayerAC(playerId);
+                registerSession(msg.name);
                 wsSend(ws, { type: 'roomCreated', code: code, pid: playerId, isHost: true });
 
             } else if (msg.type === 'joinRoom') {
@@ -297,10 +378,11 @@ function start(port, gameDir) {
                     wsSend(ws, { type: 'error', msg: 'ROOM_NOT_FOUND' });
                     return;
                 }
-                rooms[code].players[playerId] = { ws: ws, name: msg.name || 'PLAYER', alive: true, snake: [], skin: 'emerald', score: 0 };
+                rooms[code].players[playerId] = { ws: ws, name: msg.name || 'PLAYER', alive: true, snake: [], skin: 'emerald', score: 0, ready: false };
                 playerRoom = code;
                 initPlayerAC(playerId);
-                wsSend(ws, { type: 'roomJoined', code: code, pid: playerId, isHost: false, timer: rooms[code].timer });
+                registerSession(msg.name);
+                wsSend(ws, { type: 'roomJoined', code: code, pid: playerId, isHost: false, timer: rooms[code].timer, selectedMode: rooms[code].selectedMode });
                 broadcastRoom(code, { type: 'playerList', players: getPlayerList(code) });
 
             } else if (msg.type === 'timerSet') {
@@ -309,6 +391,64 @@ function start(port, gameDir) {
                 room.timer = msg.seconds;
                 broadcastRoom(playerRoom, { type: 'timerSet', seconds: msg.seconds }, playerId);
 
+            } else if (msg.type === 'selectMode') {
+                const room = rooms[playerRoom];
+                if (!room || room.host !== playerId) return;
+                room.selectedMode = msg.mode;
+                broadcastRoom(playerRoom, { type: 'modeSelected', mode: msg.mode });
+                wsSend(ws, { type: 'modeSelected', mode: msg.mode });
+
+            } else if (msg.type === 'ready') {
+                const room = rooms[playerRoom];
+                if (!room || !room.players[playerId]) return;
+                room.players[playerId].ready = true;
+                broadcastRoom(playerRoom, { type: 'playerReady', pid: playerId });
+                wsSend(ws, { type: 'playerReady', pid: playerId });
+                // Check if all players are ready
+                var allReady = true;
+                var playerCount = Object.keys(room.players).length;
+                Object.keys(room.players).forEach(function (p) {
+                    if (!room.players[p].ready) allReady = false;
+                });
+                // If only one player, start immediately when they ready up (even if already ready)
+                if ((allReady && playerCount > 1) || (playerCount === 1 && room.players[playerId].ready)) {
+                    room.inGame = true;
+                    Object.keys(room.players).forEach(function (p) {
+                        room.players[p].alive = true;
+                        room.players[p].score = 0;
+                        room.players[p].ready = false;
+                        if (playerData[p]) {
+                            playerData[p].lastScore = 0;
+                            playerData[p].lastSnakeHead = null;
+                            playerData[p].warnings = 0;
+                        }
+                    });
+                    var mode = room.selectedMode || 'classic';
+                    broadcastRoom(playerRoom, { type: 'startGame', mode: mode });
+                } else if (playerCount === 1) {
+                    // Edge case: solo player toggles ready repeatedly, always start game
+                    room.inGame = true;
+                    Object.keys(room.players).forEach(function (p) {
+                        room.players[p].alive = true;
+                        room.players[p].score = 0;
+                        room.players[p].ready = false;
+                        if (playerData[p]) {
+                            playerData[p].lastScore = 0;
+                            playerData[p].lastSnakeHead = null;
+                            playerData[p].warnings = 0;
+                        }
+                    });
+                    var mode = room.selectedMode || 'classic';
+                    broadcastRoom(playerRoom, { type: 'startGame', mode: mode });
+                }
+
+            } else if (msg.type === 'unready') {
+                const room = rooms[playerRoom];
+                if (!room || !room.players[playerId]) return;
+                room.players[playerId].ready = false;
+                broadcastRoom(playerRoom, { type: 'playerUnready', pid: playerId });
+                wsSend(ws, { type: 'playerUnready', pid: playerId });
+
             } else if (msg.type === 'startGame') {
                 const room = rooms[playerRoom];
                 if (!room || room.host !== playerId) return;
@@ -316,6 +456,7 @@ function start(port, gameDir) {
                 Object.keys(room.players).forEach(function (p) {
                     room.players[p].alive = true;
                     room.players[p].score = 0;
+                    room.players[p].ready = false;
                     if (playerData[p]) {
                         playerData[p].lastScore = 0;
                         playerData[p].lastSnakeHead = null;
@@ -403,11 +544,17 @@ function start(port, gameDir) {
         ws.on('close', function () {
             if (playerRoom) removePlayerFromRoom(playerRoom, playerId);
             delete playerData[playerId];
+            if (playerName && activeSessions[playerName] && activeSessions[playerName].playerId === playerId) {
+                delete activeSessions[playerName];
+            }
         });
 
         ws.on('error', function () {
             if (playerRoom) removePlayerFromRoom(playerRoom, playerId);
             delete playerData[playerId];
+            if (playerName && activeSessions[playerName] && activeSessions[playerName].playerId === playerId) {
+                delete activeSessions[playerName];
+            }
         });
     });
 

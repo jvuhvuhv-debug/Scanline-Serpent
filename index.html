@@ -221,6 +221,33 @@
             color: #000;
             box-shadow: 0 0 15px #3498db;
         }
+        .changelog-btn {
+            background: #0a2e2e;
+            color: #3498db;
+            border: 2px solid #3498db;
+            padding: 0;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            box-shadow: inset 0 0 5px rgba(52, 152, 219, 0.2);
+            position: absolute;
+            top: 98px;
+            right: 15px;
+            width: 38px;
+            height: 38px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        .changelog-btn:hover {
+            background: #3498db;
+            color: #000;
+            box-shadow: 0 0 15px #3498db;
+        }
         
         /* Main Menu Buttons Container */
         .main-menu-buttons {
@@ -408,6 +435,7 @@
         }
         
         .grid-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .lobby-modes-grid { grid-template-columns: repeat(4, 1fr); }
         
         /* Online Menu Styles */
         .online-room-code { color: var(--gold); font-size: 1.4rem; letter-spacing: 4px; margin: 10px 0; font-weight: bold; user-select: all; }
@@ -1129,6 +1157,7 @@
         <div id="main-menu" class="overlay hidden">
             <button class="close-btn" onclick="quitGame()">X</button>
             <button class="friends-btn" onclick="showMenu('friends')"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><circle cx="8" cy="7" r="4"/><path d="M3 13c0-2.21 3.13-4 7-4s7 1.79 7 4v3H3v-3z"/><circle cx="16" cy="8" r="3.5"/><path d="M13 13c0-1.84 2.24-3.5 5-3.5s5 1.66 5 3.5v2.5h-10v-2.5z"/></svg></button>
+            <button class="changelog-btn" onclick="showMenu('changelog')"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6z"/><path d="M8 13h8v2H8zm0 4h5v2H8z"/></svg></button>
             <h1 class="menu-title">SCANLINE SERPENT</h1>
             <p id="main-highscore">BEST: <span id="highscore-val">0</span></p>
             <div class="main-menu-buttons">
@@ -1143,6 +1172,16 @@
                 <button class="menu-btn small-btn" onclick="showMenu('tips')">TIPS</button>
                 <button class="menu-btn small-btn" onclick="showMenu('settings')">SETUP</button>
             </div>
+        </div>
+
+        <!-- Changelog Menu -->
+        <div id="changelog-menu" class="overlay hidden">
+            <h2 class="section-title">CHANGELOG</h2>
+            <div class="stats-box" style="border-color: #e74c3c; margin-top: 20px;">
+                <p style="color: #e74c3c; font-size: 0.9rem; font-weight: bold;">ERROR</p>
+                <p style="color: #e74c3c; margin-top: 10px;">Please Check Scanline Serpent Steam Page to view Changelogs!</p>
+            </div>
+            <button class="menu-btn btn-top-margin" onclick="showMenu('main')">RETURN</button>
         </div>
 
         <!-- Friends Menu -->
@@ -1222,7 +1261,6 @@
 
         <!-- Online Lobby -->
         <div id="online-lobby-menu" class="overlay hidden">
-            <h2 class="section-title">LOBBY</h2>
             <p class="online-status">ROOM_CODE:</p>
             <div class="online-room-code" id="lobby-room-code">------</div>
             <div class="online-players" id="lobby-players"></div>
@@ -1236,13 +1274,13 @@
                 <button class="timer-preset-btn" onclick="setOnlineTimer(1200)">20:00</button>
             </div>
             <p class="online-status" style="margin-top:8px;">SELECT_MODE (HOST ONLY):</p>
-            <div class="grid-menu" id="lobby-modes">
-                <button class="menu-btn" onclick="startOnlineGame('classic')">Classic</button>
-                <button class="menu-btn" onclick="startOnlineGame('cheese')">Cheese</button>
-                <button class="menu-btn" onclick="startOnlineGame('twin')">Twin</button>
-                <button class="menu-btn" onclick="startOnlineGame('shield')">Shield</button>
-                <button class="menu-btn" onclick="startOnlineGame('key')">Key</button>
-                <button class="menu-btn" onclick="startOnlineGame('ghost')">Ghost</button>
+            <div class="grid-menu lobby-modes-grid" id="lobby-modes">
+                <button class="timer-preset-btn" onclick="startOnlineGame('classic')">Classic</button>
+                <button class="timer-preset-btn" onclick="startOnlineGame('cheese')">Cheese</button>
+                <button class="timer-preset-btn" onclick="startOnlineGame('twin')">Twin</button>
+                <button class="timer-preset-btn" onclick="startOnlineGame('shield')">Shield</button>
+                <button class="timer-preset-btn" onclick="startOnlineGame('key')">Key</button>
+                <button class="timer-preset-btn" onclick="startOnlineGame('ghost')">Ghost</button>
             </div>
             <div style="margin-top:10px;">
                 <button class="menu-btn visibility-toggle" id="lobby-visibility-btn" onclick="toggleRoomVisibility()" style="font-size:0.7rem; padding:6px; width:auto; display:inline-block;">PUBLIC</button>
@@ -1613,7 +1651,7 @@
 <!-- FPS Counter -->
 <div id="fps-counter">0 FPS</div>
 
-<div class="version-tag">ONLINE TEST 1.3</div>
+<div class="version-tag">ONLINE TEST 1.4</div>
 
 <!-- Multiplayer uses server.js WebSocket - no external dependency needed -->
 <script>
@@ -1622,8 +1660,8 @@
     const SB_BOARD_ID = "d5728bb2-c673-4925-a093-08de7adf9909";
     const SB_BASE_URL = "https://api.simpleboards.dev/api/entries";
     const SB_AUTH_MARKER = "AUTH_ACCOUNT_DO_NOT_DELETE";
-    const GAME_VERSION = "1.3";
-    const REQUIRED_VERSION = "1.3";
+    const GAME_VERSION = "1.4";
+    const REQUIRED_VERSION = "1.4";
 
     // Cloud-based authentication functions using leaderboard API
     async function saveAccountToCloud(username, passwordHash) {
@@ -5621,42 +5659,71 @@
         var password = document.getElementById('online-create-pass').value;
         var confirm = document.getElementById('online-create-confirm').value;
         if (!username || username.length < 3) { showToast('MIN_3_CHARS'); return; }
-        if (accounts[username]) { showToast('ACCOUNT_EXISTS'); return; }
         if (!password || password.length < 8) { showToast('MIN_8_CHARS'); return; }
         if (password !== confirm) { showToast('PASSWORDS_DONT_MATCH'); return; }
         var passwordHash = hashPassword(password);
-        accounts[username] = { username: username, passwordHash: passwordHash, createdAt: new Date().toISOString(), coins: 0, highScore: 0, ownedSkins: ['emerald'], equippedSkin: 'emerald' };
-        localStorage.setItem('snk_v14_accounts', JSON.stringify(accounts));
-        localStorage.setItem('snk_v14_logged_in_user', username);
-        isLoggedIn = true;
-        currentAccountUsername = username;
-        systemName = username;
-        coins = 0; highScore = 0; ownedSkins = ['emerald']; equippedSkin = 'emerald';
-        localStorage.setItem('snk_v14_name', systemName);
-        showToast('ACCOUNT_CREATED');
-        showMenu('online');
+        connectToServer().then(function() {
+            // Listen for response
+            function onMessage(evt) {
+                var data;
+                try { data = JSON.parse(evt.data); } catch(e) { return; }
+                if (data.type === 'createAccountResult') {
+                    onlineWs.removeEventListener('message', onMessage);
+                    if (data.success) {
+                        isLoggedIn = true;
+                        currentAccountUsername = username;
+                        systemName = username;
+                        coins = 0; highScore = 0; ownedSkins = ['emerald']; equippedSkin = 'emerald';
+                        localStorage.setItem('snk_v14_logged_in_user', username);
+                        localStorage.setItem('snk_v14_name', systemName);
+                        showToast('ACCOUNT_CREATED');
+                        showMenu('online');
+                    } else {
+                        showToast(data.msg || 'ACCOUNT_CREATION_FAILED');
+                    }
+                }
+            }
+            onlineWs.addEventListener('message', onMessage);
+            wsSend({ type: 'createAccount', username: username, passwordHash: passwordHash });
+        }).catch(function() {
+            showToast('SERVER_UNREACHABLE');
+        });
     }
 
     function onlineLoginAccount() {
         var username = document.getElementById('online-login-user').value.toUpperCase().replace(/\s/g, '_');
         var password = document.getElementById('online-login-pass').value;
         if (!username || !password) { showToast('REQUIRED'); return; }
-        var account = accounts[username];
-        if (!account) { showToast('ACCOUNT_NOT_FOUND'); return; }
         var passwordHash = hashPassword(password);
-        if (account.passwordHash !== passwordHash) { showToast('INVALID_PASSWORD'); return; }
-        isLoggedIn = true;
-        currentAccountUsername = username;
-        systemName = username;
-        coins = account.coins || 0;
-        highScore = account.highScore || 0;
-        ownedSkins = account.ownedSkins || ['emerald'];
-        equippedSkin = account.equippedSkin || 'emerald';
-        localStorage.setItem('snk_v14_logged_in_user', username);
-        localStorage.setItem('snk_v14_name', systemName);
-        localStorage.setItem('snk_v14_coins', coins);
-        showToast('LOGGED_IN');
-        showMenu('online');
+        connectToServer().then(function() {
+            function onMessage(evt) {
+                var data;
+                try { data = JSON.parse(evt.data); } catch(e) { return; }
+                if (data.type === 'loginAccountResult') {
+                    onlineWs.removeEventListener('message', onMessage);
+                    if (data.success) {
+                        isLoggedIn = true;
+                        currentAccountUsername = username;
+                        systemName = username;
+                        coins = data.coins || 0;
+                        highScore = data.highScore || 0;
+                        ownedSkins = data.ownedSkins || ['emerald'];
+                        equippedSkin = data.equippedSkin || 'emerald';
+                        localStorage.setItem('snk_v14_logged_in_user', username);
+                        localStorage.setItem('snk_v14_name', systemName);
+                        localStorage.setItem('snk_v14_coins', coins);
+                        showToast('LOGGED_IN');
+                        showMenu('online');
+                    } else {
+                        showToast(data.msg || 'LOGIN_FAILED');
+                    }
+                }
+            }
+            onlineWs.addEventListener('message', onMessage);
+            wsSend({ type: 'loginAccount', username: username, passwordHash: passwordHash });
+        }).catch(function() {
+            showToast('SERVER_UNREACHABLE');
+        });
     }
 
     // Splash Screen Functions - Windows 2000 Boot Style
