@@ -1651,7 +1651,7 @@
 <!-- FPS Counter -->
 <div id="fps-counter">0 FPS</div>
 
-<div class="version-tag">ONLINE TEST 1.4</div>
+<div class="version-tag">ONLINE TEST 1.3</div>
 
 <!-- Multiplayer uses server.js WebSocket - no external dependency needed -->
 <script>
@@ -1660,8 +1660,8 @@
     const SB_BOARD_ID = "d5728bb2-c673-4925-a093-08de7adf9909";
     const SB_BASE_URL = "https://api.simpleboards.dev/api/entries";
     const SB_AUTH_MARKER = "AUTH_ACCOUNT_DO_NOT_DELETE";
-    const GAME_VERSION = "1.4";
-    const REQUIRED_VERSION = "1.4";
+    const GAME_VERSION = "1.3";
+    const REQUIRED_VERSION = "1.3";
 
     // Cloud-based authentication functions using leaderboard API
     async function saveAccountToCloud(username, passwordHash) {
@@ -3071,14 +3071,18 @@
         }
     }
 
+    // Track pending room code for create room flow
+    let pendingRoomCode = null;
     function createOnlineRoom() {
-        onlineRoomCode = generateRoomCode();
+        const code = generateRoomCode();
+        pendingRoomCode = code;
         roomIsPublic = true;
         showToast('CREATING_ROOM...');
         connectToServer().then(function() {
-            wsSend({ type: 'createRoom', code: onlineRoomCode, name: systemName, isPublic: true });
+            wsSend({ type: 'createRoom', code: code, name: systemName, isPublic: true });
             updateVisibilityButton();
         }).catch(function(err) {
+            pendingRoomCode = null;
             showToast('SERVER_UNREACHABLE — try again in 30s');
         });
     }
@@ -3153,6 +3157,13 @@
 
     function handleServerMessage(data) {
         if (data.type === 'roomCreated') {
+            // Only accept room creation if it matches the pending code (prevents race conditions)
+            if (pendingRoomCode && data.code === pendingRoomCode) {
+                onlineRoomCode = pendingRoomCode;
+                pendingRoomCode = null;
+            } else if (!onlineRoomCode) {
+                onlineRoomCode = data.code;
+            }
             onlinePlayerId = data.pid;
             isRoomHost = true;
             onlinePlayers = {};
@@ -5659,71 +5670,42 @@
         var password = document.getElementById('online-create-pass').value;
         var confirm = document.getElementById('online-create-confirm').value;
         if (!username || username.length < 3) { showToast('MIN_3_CHARS'); return; }
+        if (accounts[username]) { showToast('ACCOUNT_EXISTS'); return; }
         if (!password || password.length < 8) { showToast('MIN_8_CHARS'); return; }
         if (password !== confirm) { showToast('PASSWORDS_DONT_MATCH'); return; }
         var passwordHash = hashPassword(password);
-        connectToServer().then(function() {
-            // Listen for response
-            function onMessage(evt) {
-                var data;
-                try { data = JSON.parse(evt.data); } catch(e) { return; }
-                if (data.type === 'createAccountResult') {
-                    onlineWs.removeEventListener('message', onMessage);
-                    if (data.success) {
-                        isLoggedIn = true;
-                        currentAccountUsername = username;
-                        systemName = username;
-                        coins = 0; highScore = 0; ownedSkins = ['emerald']; equippedSkin = 'emerald';
-                        localStorage.setItem('snk_v14_logged_in_user', username);
-                        localStorage.setItem('snk_v14_name', systemName);
-                        showToast('ACCOUNT_CREATED');
-                        showMenu('online');
-                    } else {
-                        showToast(data.msg || 'ACCOUNT_CREATION_FAILED');
-                    }
-                }
-            }
-            onlineWs.addEventListener('message', onMessage);
-            wsSend({ type: 'createAccount', username: username, passwordHash: passwordHash });
-        }).catch(function() {
-            showToast('SERVER_UNREACHABLE');
-        });
+        accounts[username] = { username: username, passwordHash: passwordHash, createdAt: new Date().toISOString(), coins: 0, highScore: 0, ownedSkins: ['emerald'], equippedSkin: 'emerald' };
+        localStorage.setItem('snk_v14_accounts', JSON.stringify(accounts));
+        localStorage.setItem('snk_v14_logged_in_user', username);
+        isLoggedIn = true;
+        currentAccountUsername = username;
+        systemName = username;
+        coins = 0; highScore = 0; ownedSkins = ['emerald']; equippedSkin = 'emerald';
+        localStorage.setItem('snk_v14_name', systemName);
+        showToast('ACCOUNT_CREATED');
+        showMenu('online');
     }
 
     function onlineLoginAccount() {
         var username = document.getElementById('online-login-user').value.toUpperCase().replace(/\s/g, '_');
         var password = document.getElementById('online-login-pass').value;
         if (!username || !password) { showToast('REQUIRED'); return; }
+        var account = accounts[username];
+        if (!account) { showToast('ACCOUNT_NOT_FOUND'); return; }
         var passwordHash = hashPassword(password);
-        connectToServer().then(function() {
-            function onMessage(evt) {
-                var data;
-                try { data = JSON.parse(evt.data); } catch(e) { return; }
-                if (data.type === 'loginAccountResult') {
-                    onlineWs.removeEventListener('message', onMessage);
-                    if (data.success) {
-                        isLoggedIn = true;
-                        currentAccountUsername = username;
-                        systemName = username;
-                        coins = data.coins || 0;
-                        highScore = data.highScore || 0;
-                        ownedSkins = data.ownedSkins || ['emerald'];
-                        equippedSkin = data.equippedSkin || 'emerald';
-                        localStorage.setItem('snk_v14_logged_in_user', username);
-                        localStorage.setItem('snk_v14_name', systemName);
-                        localStorage.setItem('snk_v14_coins', coins);
-                        showToast('LOGGED_IN');
-                        showMenu('online');
-                    } else {
-                        showToast(data.msg || 'LOGIN_FAILED');
-                    }
-                }
-            }
-            onlineWs.addEventListener('message', onMessage);
-            wsSend({ type: 'loginAccount', username: username, passwordHash: passwordHash });
-        }).catch(function() {
-            showToast('SERVER_UNREACHABLE');
-        });
+        if (account.passwordHash !== passwordHash) { showToast('INVALID_PASSWORD'); return; }
+        isLoggedIn = true;
+        currentAccountUsername = username;
+        systemName = username;
+        coins = account.coins || 0;
+        highScore = account.highScore || 0;
+        ownedSkins = account.ownedSkins || ['emerald'];
+        equippedSkin = account.equippedSkin || 'emerald';
+        localStorage.setItem('snk_v14_logged_in_user', username);
+        localStorage.setItem('snk_v14_name', systemName);
+        localStorage.setItem('snk_v14_coins', coins);
+        showToast('LOGGED_IN');
+        showMenu('online');
     }
 
     // Splash Screen Functions - Windows 2000 Boot Style
